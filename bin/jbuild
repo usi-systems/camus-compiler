@@ -1,0 +1,8 @@
+(jbuild_version 1)
+
+(executables
+ ((names (camus))
+  (public_names (camus))
+  (preprocess (pps (ppx_let)))
+  (libraries (async core core_extended mparser mparser.re query))
+))

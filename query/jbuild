@@ -1,0 +1,12 @@
+(jbuild_version 1)
+
+(menhir ((modules (Query_Annotation_Parser Query_Parser))))
+
+(ocamllex (Query_Annotation_Lexer Query_Lexer))
+
+(library
+  ((name query)
+   (public_name query)
+   (libraries (async bignum core core_extended ocamlgraph sexplib))
+   (preprocess (pps (ppx_let ppx_deriving ppx_compare ppx_sexp_conv)))
+))

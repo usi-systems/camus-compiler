@@ -1,0 +1,11 @@
+opam-version: "1.2"
+version: "1.0"
+maintainer: "jepset@usi punto ch"
+authors: ["Theo Jepsen"]
+homepage: "https://github.com/usi-systems/p4pubsub"
+bug-reports: "https://github.com/usi-systems/p4pubsub/issues"
+dev-repo: "https://github.com/usi-systems/p4pubsub"
+license: "None"
+build: [
+  ["jbuilder" "build" "--only" "query" "--root" "." "-j" jobs "@install"]
+]

@@ -1,0 +1,4 @@
+add_order.shares = 1: fwd(1);
+add_order.price = 2: fwd(2);
+add_order.shares = 3 and add_order.price = 4: fwd(3);
+add_order.shares > 100 and add_order.stock = "BFN": fwd(2);
