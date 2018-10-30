@@ -57,10 +57,10 @@ let gen_query_control (qs:QuerySpec.t) : string =
   in
   (* XXX the control flow should be in the order of the field annotations *)
   let control =
-    (List.fold_right
+    (List.fold_left
     qs.fields
     ~init:"  apply {\n    meta.query.state = 0;\n"
-    ~f:(fun qf t ->
+    ~f:(fun t qf ->
         let open QuerySpec in
         let h, f, m = match qf with HeaderField(h, f, m, _) -> h, f, m in
         t ^ (if m = RangeMatch || m = ExactAndRangeMatch then
