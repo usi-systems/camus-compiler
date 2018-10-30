@@ -55,4 +55,5 @@ module P4RuntimeConf : sig
   val from_abstract : QueryTablePipeline.t -> t
   val format_mcast_groups : t -> string
   val format_commands : t -> string
+  val json : t -> string
 end

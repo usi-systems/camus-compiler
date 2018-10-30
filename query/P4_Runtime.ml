@@ -110,7 +110,7 @@ module P4Table = struct
     | QueryAction.P4Action(name, args)::[] -> (name, _to_num_list args)
     | _ when all_fwd_actions al ->  ("set_mgid", [Number (get_mgid mgid_for_group al)])
     (* no actions, drop *)
-    | [] -> ("drop", [])
+    | [] -> ("query_drop", [])
     | _ -> raise (Failure "Unable to generate table commands for this action or combination of actions")
 
   let _translate_terminal mgid_for_group e =
@@ -132,7 +132,7 @@ module P4Table = struct
         qt.entries
         ~f:(_translate_terminal mgid_for_group)
     in
-    let state_field = QueryField.HeaderField("query_meta", "state", 1, 16) in
+    let state_field = QueryField.HeaderField("query", "state", 1, 16) in
     [{
           name = "query_actions";
           fields = [state_field];
@@ -165,7 +165,7 @@ module P4Table = struct
           | _ -> raise (Failure "Bad entries"))
       all_entries
     in
-    let state_field = QueryField.HeaderField("query_meta", "state", 1, 16) in
+    let state_field = QueryField.HeaderField("query", "state", 1, 16) in
     let ex_table =
       if List.length ex_entries = 0 then
         []
@@ -234,11 +234,24 @@ module P4Table = struct
     | LtMatch (v, _) ->
         Printf.sprintf "0x00->0x%x" ((int_of_value v)-1)
     | GtMatch (v, w) ->
-        Printf.sprintf "0x%x->0x%x" ((int_of_value v)+1) (int_exp 2 w)
+        Printf.sprintf "0x%x->0x%x" ((int_of_value v)+1) ((int_exp 2 w)-1)
     | RangeMatch(a, b, _) when (int_of_value a) < (int_of_value b) ->
         Printf.sprintf "0x%x->0x%x" (int_of_value a) (int_of_value b)
     | RangeMatch(a, b, _) ->
         Printf.sprintf "0x%x->0x%x" (int_of_value b) (int_of_value a)
+
+  let json_format_match m =
+    match m with
+    | EqMatch(v, _) ->
+        Printf.sprintf "[%d]" (int_of_value v)
+    | LtMatch (v, _) ->
+        Printf.sprintf "[0, %d]" ((int_of_value v)-1)
+    | GtMatch (v, w) ->
+        Printf.sprintf "[%d, %d]" ((int_of_value v)+1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, _) when (int_of_value a) < (int_of_value b) ->
+        Printf.sprintf "[%d, %d]" (int_of_value a) (int_of_value b)
+    | RangeMatch(a, b, _) ->
+        Printf.sprintf "[%d, %d]" (int_of_value b) (int_of_value a)
 
   let format_matches ms =
     Caml.String.concat " "
@@ -258,6 +271,35 @@ module P4Table = struct
   let format_t t =
     Caml.String.concat "\n"
       (List.map t.entries ~f:(format_entry t.name))
+
+
+  let json t =
+    let json_matches ms : string =
+      Caml.String.concat ","
+        (List.map2_exn t.fields ms ~f:(fun hf m ->
+          let h,f = match hf with QueryField.HeaderField(h, f, _, _) -> h, f in
+          let hdr = if h = "query" && f = "state" then "meta" else "hdr" in
+          Printf.sprintf "\"%s.%s.%s\": %s" hdr h f (json_format_match m))) in
+    let arg_name act =
+      match act with
+      | "set_next_state" -> "next_state"
+      | "set_mgid" -> "mgid"
+      | "set_egress_port" -> "port"
+      | _ -> raise (Failure "Unknown action") in
+    let json_entry e =
+      let (matches, (act, args)) = e in
+      let priority = if is_ternary matches then
+        Printf.sprintf ", \"priority\": %d" (get_priority ()) else "" in
+      let params =
+        if (List.length args) > 0 then
+          (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act) (int_of_value  (List.hd_exn args))
+          ) else "" in
+      Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\":
+        {%s}, \"action_name\": \"Camus.%s\"%s%s}"
+        t.name (json_matches matches) act params priority
+      in
+    Caml.String.concat ","
+      (List.map t.entries ~f:json_entry)
 
 end
 
@@ -326,6 +368,11 @@ module P4RuntimeConf = struct
   let format_commands t =
     Caml.String.concat "\n"
       (List.map (String.Map.data t.tables) ~f:P4Table.format_t)
+
+  let json t =
+    Printf.sprintf "[%s]"
+    (Caml.String.concat ","
+      (List.map (String.Map.data t.tables) ~f:P4Table.json))
 
   let format_mcast_groups t =
     Caml.String.concat "\n"

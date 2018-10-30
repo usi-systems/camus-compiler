@@ -84,6 +84,10 @@ let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
                           ~data:(P4RuntimeConf.format_commands rtc) in
                let () = Format.eprintf "[commands: %s_commands.txt]@\n%!" out_base in
 
+               let () = Out_channel.write_all (out_base ^ "_entries.json")
+                          ~data:(P4RuntimeConf.json rtc) in
+               let () = Format.eprintf "[entries: %s_entries.json]@\n%!" out_base in
+
                let () = Out_channel.write_all (out_base ^ "_mcast_groups.txt")
                           ~data:(P4RuntimeConf.format_mcast_groups rtc) in
                let () = Format.eprintf "[mcast: %s_mcast_groups.txt]@\n%!" out_base in
