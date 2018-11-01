@@ -212,14 +212,16 @@ module P4Table = struct
           | (RangeMatch _) | (LtMatch _) | (GtMatch _) -> true
           | _ -> false)
 
+  let space_pad_str s n : string =
+    s ^ (String.make (max 0 (n - (String.length s))) ' ')
 
-  let int_of_value v =
+  let int_of_value v w =
     match v with
     | Number i -> i
-    | String s -> binary_of_str s
+    | String s -> binary_of_str (space_pad_str s (w/8))
 
   let format_value v =
-    Printf.sprintf "0x%x" (int_of_value v)
+    Printf.sprintf "0x%x" (int_of_value v 0)
 
   let format_args args =
     Caml.String.concat " "
@@ -231,27 +233,27 @@ module P4Table = struct
     match m with
     | EqMatch(v, _) ->
         format_value v
-    | LtMatch (v, _) ->
-        Printf.sprintf "0x00->0x%x" ((int_of_value v)-1)
+    | LtMatch (v, w) ->
+        Printf.sprintf "0x00->0x%x" ((int_of_value v w)-1)
     | GtMatch (v, w) ->
-        Printf.sprintf "0x%x->0x%x" ((int_of_value v)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, _) when (int_of_value a) < (int_of_value b) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value a) (int_of_value b)
-    | RangeMatch(a, b, _) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value b) (int_of_value a)
+        Printf.sprintf "0x%x->0x%x" ((int_of_value v w)+1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
+        Printf.sprintf "0x%x->0x%x" (int_of_value a w) (int_of_value b w)
+    | RangeMatch(a, b, w) ->
+        Printf.sprintf "0x%x->0x%x" (int_of_value b w) (int_of_value a w)
 
   let json_format_match m =
     match m with
-    | EqMatch(v, _) ->
-        Printf.sprintf "[%d]" (int_of_value v)
-    | LtMatch (v, _) ->
-        Printf.sprintf "[0, %d]" ((int_of_value v)-1)
+    | EqMatch(v, w) ->
+        Printf.sprintf "[%u]" (int_of_value v w)
+    | LtMatch (v, w) ->
+        Printf.sprintf "[0, %d]" ((int_of_value v w)-1)
     | GtMatch (v, w) ->
-        Printf.sprintf "[%d, %d]" ((int_of_value v)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, _) when (int_of_value a) < (int_of_value b) ->
-        Printf.sprintf "[%d, %d]" (int_of_value a) (int_of_value b)
-    | RangeMatch(a, b, _) ->
-        Printf.sprintf "[%d, %d]" (int_of_value b) (int_of_value a)
+        Printf.sprintf "[%d, %d]" ((int_of_value v w)+1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
+        Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
+    | RangeMatch(a, b, w) ->
+        Printf.sprintf "[%d, %d]" (int_of_value b w) (int_of_value a w)
 
   let format_matches ms =
     Caml.String.concat " "
@@ -292,7 +294,8 @@ module P4Table = struct
         Printf.sprintf ", \"priority\": %d" (get_priority ()) else "" in
       let params =
         if (List.length args) > 0 then
-          (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act) (int_of_value  (List.hd_exn args))
+          (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act)
+          (int_of_value  (List.hd_exn args) 0)
           ) else "" in
       Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\":
         {%s}, \"action_name\": \"Camus.%s\"%s%s}"
