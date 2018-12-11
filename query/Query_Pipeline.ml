@@ -63,11 +63,12 @@ let gen_query_control (qs:QuerySpec.t) : string =
     ~f:(fun t qf ->
         let open QuerySpec in
         let h, f, m = match qf with HeaderField(h, f, m, _) -> h, f, m in
-        t ^ (if m = RangeMatch || m = ExactAndRangeMatch then
-          "    if (!" ^ (mk_query_range_tbl_name h f) ^ ".apply().hit)\n"
-          else "")
+        t
         ^ (if m = ExactMatch || m = ExactAndRangeMatch then
           "    if (!" ^ (mk_query_exact_tbl_name h f) ^ ".apply().hit)\n"
+          else "")
+        ^ (if m = RangeMatch || m = ExactAndRangeMatch then
+          "    if (!" ^ (mk_query_range_tbl_name h f) ^ ".apply().hit)\n"
           else "")
         ^ "      "  ^ (mk_query_miss_tbl_name h f) ^ ".apply();\n\n"))
     ^ "    query_actions.apply();\n  }"
