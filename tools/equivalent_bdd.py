@@ -36,8 +36,16 @@ def getFSM(entries):
 
     return trans_for_state
 
-def equivalentFSM(fsm1, fsm2, state1=0, state2=0):
-    """ Assert that fsm1 and fsm2 are equivalent, starting from state1 and state2 respectively """
+def getMgidMap(mcast_str):
+    groups = {}
+    for l in mcast_str.split('\n'):
+        mgid, ports = l.split(':')
+        groups[int(mgid)] = set(map(int, ports.split()))
+    return groups
+
+def equivalentBDD(bdd1, bdd2, state1=0, state2=0):
+    """ Assert that bdd1 and bdd2 are equivalent, starting from state1 and state2 respectively """
+    fsm1, fsm2 = bdd1['fsm'], bdd2['fsm']
     trans1, trans2 = fsm1[state1], fsm2[state2]
 
     # Should have the same predicates
@@ -51,25 +59,28 @@ def equivalentFSM(fsm1, fsm2, state1=0, state2=0):
         assert state_type1 == state_type2, "%s != %s" % (state_type1, state_type2)
 
         if state_type1 == 'state':
-            equivalentFSM(fsm1, fsm2, state1=state_val1, state2=state_val2)
+            equivalentBDD(bdd1, bdd2, state1=state_val1, state2=state_val2)
+        elif state_type1 == 'mgid':
+            assert bdd1['mgid_map'][state_val1] == bdd2['mgid_map'][state_val2]
         else:
-            assert state_val1 == state_val2, "%s != %s" % (state_val1, state_val2)
+            assert state_val1 == state_val2, "%s, %s, %s != %s" % (state_type1, state_type2, state_val1, state_val2)
 
 
 filenames = sys.argv[1:]
-#filenames = ["entries1.json", "entries1.json"]
+#filenames = ["entries1.json", "mcast1.txt", "entries2.json", "mcast2.txt"]
 
 if len(filenames) < 1:
-    sys.stderr.write("Usage: %s JSON_ENTRIES1 JSON_ENTRIES2 ..." % sys.argv[0])
+    sys.stderr.write("Usage: %s ENTRIES1 MCAST1 ENTRIES2 MCAST2 ..." % sys.argv[0])
     sys.exit(1)
 
+BDDs = []
 
-fsms = []
-for fn in filenames:
-    with open(fn, 'r') as f:
-        entries = json.load(f)
-        fsm = getFSM(entries)
-        fsms.append(fsm)
+for (entries_fn, mcast_fn) in zip(filenames[::2], filenames[1::2]):
+    with open(entries_fn, 'r') as f:
+        fsm = getFSM(json.load(f))
+    with open(mcast_fn, 'r') as f:
+        mgid_map = getMgidMap(f.read())
+    BDDs.append(dict(fsm=fsm, mgid_map=mgid_map))
 
-for fsm in fsms[1:]:
-    equivalentFSM(fsms[0], fsm)
+for bdd in BDDs[1:]:
+    equivalentBDD(BDDs[0], bdd)
