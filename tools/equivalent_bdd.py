@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import sys
 import json
 
@@ -17,10 +19,14 @@ def getFSM(entries):
         if 'action_name' in e:
             if e['action_name'].endswith('set_egress_port'):
                 s2 = ('port', e['action_params']['port'])
+            elif e['action_name'].endswith('set_mgid'):
+                s2 = ('mgid', e['action_params']['mgid'])
             elif e['action_name'].endswith('set_next_state'):
                 s2 = ('state', e['action_params']['next_state'])
             elif e['action_name'].endswith('query_drop'):
                 s2 = ('drop', 0)
+            else:
+                raise Exception("Unrecognized action name: %s" % e['action_name'])
 
         assert s1 is not None, e
 
@@ -65,5 +71,5 @@ for fn in filenames:
         fsm = getFSM(entries)
         fsms.append(fsm)
 
-for fsm in fsms:
+for fsm in fsms[1:]:
     equivalentFSM(fsms[0], fsm)
