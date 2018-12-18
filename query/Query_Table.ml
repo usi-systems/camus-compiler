@@ -174,17 +174,12 @@ module QueryTablePipeline = struct
     (* Get all the terminal (action) states *)
     let terminal_states = QueryBdd.leaves bdd in
 
-    let sorted_action_states =
-      List.sort
-       ~cmp:Pervasives.compare
-       (NodeSet.elements terminal_states) in
-
     let actions_table = {
       field = None;
       is_terminal = true;
       entries =
         (List.map
-          sorted_action_states
+          (NodeSet.elements terminal_states)
           ~f:(fun u -> Terminal (getuid u, LabelSet.to_list (getlabels u))));
       } in
 

@@ -27,7 +27,7 @@ opam switch 4.04.0
 
 Install OCaml dependencies using OPAM:
 ```
-opam install async core core_extended oasis menhir ocamlgraph jbuilder ocaml-migrate-parsetree bignum mparser ppx_deriving ipaddr
+opam install async core core_extended oasis menhir ocamlgraph jbuilder ocaml-migrate-parsetree bignum mparser ppx_deriving ipaddr parmap
 ```
 
 # Build
