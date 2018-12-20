@@ -7,6 +7,7 @@
 %token <Query_Ast.info * string> IDENT
 %token <Query_Ast.info * int> NUMBER
 %token <Query_Ast.info * Int64.t> IPADDR
+%token <Query_Ast.info * Int64.t> MACADDR
 %token <Query_Ast.info> AND
 %token <Query_Ast.info> OR
 %token <Query_Ast.info> LT
@@ -83,4 +84,5 @@ constExpr:
   | STRING_LIT { let _,id = $1 in StringLit(id) }
   | NUMBER { let _,id = $1 in NumberLit(id) }
   | IPADDR { let _,id = $1 in IpAddr(Int64.to_int id) }
+  | MACADDR { let _,id = $1 in MacAddr(Int64.to_int id) }
 

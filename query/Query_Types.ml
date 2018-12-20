@@ -17,6 +17,7 @@ module QueryConst = struct
   type t =
     | Number of int
     | IP of int
+    | MAC of int
     | String of string
     [@@deriving compare, sexp]
 
@@ -31,13 +32,21 @@ module QueryConst = struct
           ((i lsr 16) land 255)
           ((i lsr 8)  land 255)
           (i land 255)
+    | MAC(i) ->
+        Printf.sprintf "%d:%d:%d:%d:%d:%d"
+          ((i lsr 40) land 255)
+          ((i lsr 32) land 255)
+          ((i lsr 24) land 255)
+          ((i lsr 16) land 255)
+          ((i lsr 8)  land 255)
+          (i land 255)
 
   let compare a b =
     match (a, b) with
-    | (((Number x)|(IP x)), ((Number y)|(IP y))) ->
+    | (((Number x)|(IP x)|(MAC x)), ((Number y)|(IP y)|(MAC y))) ->
         Pervasives.compare x y
-    | (((Number _)|(IP _)), String s) -> 1
-    | (String s, ((Number _)|(IP _))) -> -1
+    | (((Number _)|(IP _)|(MAC _)), String s) -> 1
+    | (String s, ((Number _)|(IP _)|(MAC _))) -> -1
     | (String s1, String s2) ->
         Pervasives.compare s1 s2
 
@@ -181,6 +190,7 @@ module QueryRule = struct
       match e with
       | Query_Ast.NumberLit i -> Number i
       | Query_Ast.IpAddr i -> IP i
+      | Query_Ast.MacAddr i -> MAC i
       | Query_Ast.StringLit s -> String s
       | _ -> raise (Failure "Should be a const value")
     in
@@ -222,7 +232,7 @@ module QueryRule = struct
       | Query_Ast.Gt _ -> raise (Failure "Bad format for Gt")
       | Query_Ast.Call _ -> raise (Failure "Unsupported Call")
       | (Query_Ast.Field _) | (Query_Ast.StringLit _)
-      | (Query_Ast.NumberLit _) | (Query_Ast.IpAddr _) ->
+      | (Query_Ast.NumberLit _) | (Query_Ast.IpAddr _) | (Query_Ast.MacAddr _) ->
           raise (Failure "Unexpected value here")
     in
 

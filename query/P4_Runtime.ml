@@ -86,7 +86,7 @@ module P4Table = struct
 
   let _translate_value v =
     match v with
-    | (QueryConst.Number i) | (QueryConst.IP i) ->
+    | (QueryConst.Number i) | (QueryConst.IP i) | (QueryConst.MAC i) ->
         Number i
     | QueryConst.String s -> String s
 
