@@ -22,6 +22,7 @@ type expr =
   | StringLit of string
   | NumberLit of int
   | IpAddr of int
+  | MacAddr of int
 
 type action_list = expr list
 

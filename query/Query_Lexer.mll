@@ -81,6 +81,7 @@ let hex = "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
 let int_char = ['0' - '9']
 let string_lit = '"' [^'"']* '"'
 let hex_char = ['0' - '9' 'A' - 'F' 'a' - 'f']
+let hexbyte = hex_char hex_char
 let decbyte =
      (['0'-'9'] ['0'-'9'] ['0'-'9']) | (['0'-'9'] ['0'-'9']) | ['0'-'9']
 
@@ -115,6 +116,15 @@ rule main =
                  (logor (shift_left (parse_decbyte b3) 16)
                     (logor (shift_left (parse_decbyte b2) 8)
                        (parse_decbyte b1))))) }
+  | (hexbyte as b6) ":" (hexbyte as b5) ":" (hexbyte as b4) ":" (hexbyte as b3) ":" (hexbyte as b2) ":" (hexbyte as b1)
+          { let open Int64 in
+            MACADDR(info lexbuf,
+              (logor (shift_left (parse_byte b6) 40)
+              (logor (shift_left (parse_byte b5) 32)
+              (logor (shift_left (parse_byte b4) 24)
+              (logor (shift_left (parse_byte b3) 16)
+              (logor (shift_left (parse_byte b2) 8)
+                                 (parse_byte b1))))))) }
 
   | newline            { newline lexbuf; main lexbuf  }
   | eof                { EOF }
