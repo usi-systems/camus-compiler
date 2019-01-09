@@ -173,7 +173,12 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
         else if (not is_high_branch) && V.subset var ancestor then (* implicitly false *)
           prune_implicit bdd ancestor is_high_branch low
         else
-          mk_node bdd var (prune_implicit bdd ancestor is_high_branch low) (prune_implicit bdd ancestor is_high_branch high)
+          let low2 = (prune_implicit bdd ancestor is_high_branch low) in
+          let high2 = (prune_implicit bdd ancestor is_high_branch high) in
+          if not (phys_equal low2 low && phys_equal high2 high) then
+            mk_node bdd var low2 high2
+          else
+            n
     | L _ -> n
 
 
