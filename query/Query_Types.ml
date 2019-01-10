@@ -174,6 +174,18 @@ module QueryAction = struct
     | ForwardPort(p) -> string_of_int p
     | P4Action(name, args) -> Printf.sprintf "%s(%s)" name (format_int_list args)
 
+  let compare a b =
+    match a, b with
+    | ForwardPort p1, ForwardPort p2 ->
+        Pervasives.compare p1 p2
+    | _ -> raise (Failure "Cannot compare actions of different types")
+
+  let hash t =
+    match t with
+    | ForwardPort p ->
+        Hashtbl.hash p
+    | _ -> raise (Failure "Cannot hash this type of action")
+
 end
 
 module QueryRule = struct

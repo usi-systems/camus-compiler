@@ -22,6 +22,7 @@ module type BddLabel = sig
     [@@deriving compare, sexp]
   val compare : t -> t -> int
   val format_t : t -> string
+  val hash : t -> int
 end
   
 module Conjunction (V: BddVar) : sig

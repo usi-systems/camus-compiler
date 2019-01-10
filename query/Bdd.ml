@@ -26,6 +26,7 @@ module type BddLabel = sig
     [@@deriving compare, sexp]
   val compare : t -> t -> int
   val format_t : t -> string
+  val hash : t -> int
 end
 
 module Conjunction (V: BddVar) = struct
@@ -125,7 +126,7 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
       | N n ->
           (Hashtbl.hash (V.hash n.var, getuid n.low, getuid n.high)) land Int.max_value
       | L l ->
-          (Hashtbl.hash l.labels) land Int.max_value
+          (Hashtbl.hash (List.map (LabelSet.elements l.labels) ~f:L.hash)) land Int.max_value
   end
   module NodeWeakHS = Caml.Weak.Make(NodeH)
 
@@ -190,11 +191,14 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
     | _ -> (x, y)
     in
     match x, y with
+    | (L _ as l1), (L _ as l2) when node_equal l1 bdd.empty_leaf && node_equal l2 bdd.empty_leaf ->
+        bdd.empty_leaf
     | L {labels = lbls1}, L {labels = lbls2} ->                 (* both leaves *)
         mk_leaf (LabelSet.union lbls1 lbls2)
-    | (L _ as l), (N {var = var; low = low; high = high; _} as n)
     | (N {var = var; low = low; high = high; _} as n), (L _ as l) when node_equal l bdd.empty_leaf ->   (* empty leaf and decision node *)
         n (* this is an optimization; we don't need to push the empty leaf all the way down all branches *)
+    | (L _ as l), (N {var = var; low = low; high = high; _} as n) when node_equal l bdd.empty_leaf ->
+        n
     | (L _ as l), N {var = var; low = low; high = high; _}
     | N {var = var; low = low; high = high; _}, (L _ as l) ->   (* leaf and decision node *)
         mk_node var (merge low l) (merge high l)

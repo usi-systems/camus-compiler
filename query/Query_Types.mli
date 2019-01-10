@@ -65,6 +65,8 @@ module QueryAction : sig
     [@@deriving compare, sexp]
 
   val format_t : t -> string
+  val compare : t -> t -> int
+  val hash : t -> int
 end
 
 module QueryRule : sig
