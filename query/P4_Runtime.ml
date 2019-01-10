@@ -297,11 +297,10 @@ module P4Table = struct
           (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act)
           (int_of_value  (List.hd_exn args) 0)
           ) else "" in
-      Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\":
-        {%s}, \"action_name\": \"Camus.%s\"%s%s}"
+      Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\": {%s}, \"action_name\": \"Camus.%s\"%s%s}"
         t.name (json_matches matches) act params priority
       in
-    Caml.String.concat ","
+    Caml.String.concat ",\n"
       (List.map t.entries ~f:json_entry)
 
 end
@@ -374,7 +373,7 @@ module P4RuntimeConf = struct
 
   let json t =
     Printf.sprintf "[%s]"
-    (Caml.String.concat ","
+    (Caml.String.concat ",\n"
       (List.map (String.Map.data t.tables) ~f:P4Table.json))
 
   let format_mcast_groups t =
