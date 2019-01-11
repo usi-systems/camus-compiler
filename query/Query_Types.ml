@@ -170,6 +170,74 @@ module AtomicPredicate = struct
     | Eq(_, String x), String y -> y = x
     | _ -> raise (Failure "Invalid assignment")
 
+  module ConstRange = struct
+    type t =
+      QueryConst.t option * QueryConst.t option
+      [@@deriving compare, sexp]
+
+    let set_lt cr x : t =
+      match cr with
+      | (a, _) -> (a, Some (QueryConst.Number ((QueryConst.to_int x)-1)))
+
+    let set_gt cr x : t =
+      match cr with
+      | (_, b) -> (Some (QueryConst.Number ((QueryConst.to_int x)+1)), b)
+
+    let set_eq cr x : t =
+      match cr with
+      | _ -> (Some x, Some x)
+
+    let implies_true_eq cr x : bool = match cr with
+      | (Some a, Some b) -> a = x && b = x
+      | _ -> false
+
+    let implies_true_lt cr x : bool = match cr with
+      | (_, Some b) -> (QueryConst.compare b x) < 0
+      | _ -> false
+
+    let implies_true_gt cr x : bool = match cr with
+      | (Some a, _) -> (QueryConst.compare a x) > 0
+      | _ -> false
+
+  end
+
+  type var_type = t
+    [@@deriving compare, sexp]
+
+  module ConstraintSet = struct
+    module FieldMap = Map.Make(QueryField)
+    type t = ConstRange.t FieldMap.t
+      [@@deriving compare, sexp]
+    let empty = FieldMap.empty
+
+    let getcr cs qf =
+      match FieldMap.find cs qf with
+      | None -> (None, None)
+      | Some x -> x
+
+    let add_constraint cs var =
+      let qf = field var in
+      let cr = getcr cs qf in
+      let cr2 =
+        match var with
+        | Eq (_, x) -> ConstRange.set_eq cr x
+        | Lt (_, x) -> ConstRange.set_lt cr x
+        | Gt (_, x) -> ConstRange.set_gt cr x
+      in
+      FieldMap.add cs ~key:qf ~data:cr2
+
+    let implies_true cs var =
+      let cr = getcr cs (field var) in
+      match var with
+      | Eq (_, x) -> ConstRange.implies_true_eq cr x
+      | Lt (_, x) -> ConstRange.implies_true_lt cr x
+      | Gt (_, x) -> ConstRange.implies_true_gt cr x
+
+    let implies_false cs var =
+      raise (Failure "Unimplemented")
+
+  end
+
 end
 
 module QueryFormula = Formula(AtomicPredicate)

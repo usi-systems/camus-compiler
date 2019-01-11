@@ -55,6 +55,25 @@ module AtomicPredicate : sig
   val independent : t -> t -> bool
   val field : t -> QueryField.t
   val eval : assignments -> t -> bool
+
+  module ConstRange : sig
+    type t =
+      QueryConst.t option * QueryConst.t option
+      [@@deriving compare, sexp]
+  end
+
+  type var_type = t
+    [@@deriving compare, sexp]
+
+  module ConstraintSet : sig
+    module FieldMap : module type of Map.Make(QueryField)
+    type t = ConstRange.t FieldMap.t
+      [@@deriving compare, sexp]
+    val empty : t
+    val add_constraint : t -> var_type -> t
+    val implies_true : t -> var_type -> bool
+    val implies_false : t -> var_type -> bool
+  end
 end
 
 module QueryFormula : module type of Formula(AtomicPredicate)
