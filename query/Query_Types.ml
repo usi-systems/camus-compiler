@@ -55,6 +55,11 @@ module QueryConst = struct
 
   let max (a:t) (b:t) : t =
     if compare a b > 0 then b else a
+
+  let to_int (a:t) : int =
+    match a with
+    | Number i -> i
+    | _ -> raise (Failure "Cannot convert this QueryConst to int")
 end
 
 
@@ -105,6 +110,15 @@ module AtomicPredicate = struct
     | (Lt(x, _), Gt(y, _)) when x=y -> -1
     | (Gt(x, _), Eq(y, _)) when x=y -> -1
     | (Gt(x, _), Lt(y, _)) when x=y -> 1
+    (* Eq < Lt < Gt *)
+    (*
+    | (Eq(x, _), Lt(y, _)) when x=y -> -1
+    | (Eq(x, _), Gt(y, _)) when x=y -> -1
+    | (Lt(x, _), Eq(y, _)) when x=y -> 1
+    | (Lt(x, _), Gt(y, _)) when x=y -> -1
+    | (Gt(x, _), Eq(y, _)) when x=y -> 1
+    | (Gt(x, _), Lt(y, _)) when x=y -> 1
+    *)
     | ((Eq(x, _) | Lt(x, _) | Gt(x, _)), (Eq(y, _) | Lt(y, _) | Gt(y, _))) ->
         QueryField.compare x y
 

@@ -24,7 +24,7 @@ module QueryTable = struct
     | LtMatch of QueryConst.t
     | GtMatch of QueryConst.t
     | EqMatch of QueryConst.t
-    | RangeMatch of QueryConst.t * QueryConst.t
+    | RangeMatch of QueryConst.t * QueryConst.t (* inclusive *)
     | Wildcard
     [@@deriving compare, sexp]
 

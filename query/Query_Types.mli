@@ -19,6 +19,7 @@ module QueryConst : sig
   val compare : t -> t -> int
   val min : t -> t -> t
   val max : t -> t -> t
+  val to_int : t -> int
   val format_t : t -> string
 end
 
