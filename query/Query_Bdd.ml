@@ -3,8 +3,6 @@ open Bdd
 open Query_Types
 open Query_Spec
 
-module StringMap = Map.Make(String)
-
 module QueryBdd = Bdd(AtomicPredicate)(QueryAction)
 
 let conjs_from_form qf =

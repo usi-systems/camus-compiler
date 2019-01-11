@@ -199,18 +199,24 @@ module QueryTablePipeline = struct
     (* This assumes that m and the new pred are overlapping *)
     let refine_match (m:field_match) (pred:AtomicPredicate.t) : field_match =
       let m2 = make_match pred in
+      let mk_range a b =
+          RangeMatch (QueryConst.Number((QueryConst.to_int a) + 1), QueryConst.Number((QueryConst.to_int b) - 1))
+      in
       match m, m2 with
       | Wildcard, _ | _, Wildcard -> m2
       | EqMatch x, _ | _, EqMatch x -> EqMatch x
       | GtMatch x1, GtMatch x2 -> GtMatch (QueryConst.max x1 x2)
       | LtMatch y1, LtMatch y2 -> LtMatch (QueryConst.min y1 y2)
-      | LtMatch x, GtMatch y | GtMatch y, LtMatch x -> RangeMatch (x, y)
-      | RangeMatch (x1, y1), LtMatch y2 | LtMatch y2, RangeMatch (x1, y1) ->
-          RangeMatch (x1, QueryConst.min y1 y2)
-      | RangeMatch (x1, y1), GtMatch x2 | GtMatch x2, RangeMatch (x1, y1) ->
-          RangeMatch (QueryConst.max x1 x2, y1)
-      | RangeMatch (x1, y1), RangeMatch (x2, y2) ->
-          RangeMatch (QueryConst.max x1 x2, QueryConst.min y1 y2)
+      | LtMatch x, GtMatch y -> mk_range y x
+      | GtMatch x, LtMatch y -> mk_range x y
+      | _ -> raise (Failure "Something is wrong if a RangeMatch is being further refined")
+    in
+
+    let tidy_range_match m =
+      match m with
+      | RangeMatch (a, b) when a = b ->
+          EqMatch a
+      | _ -> m
     in
 
     let gather_entries field entries entry_node : EntrySet.t =
@@ -220,7 +226,7 @@ module QueryTablePipeline = struct
         | N {var=p; low=l; high=h} when (AtomicPredicate.field p) = field ->
             EntrySet.union (_visit m l) (_visit (refine_match m p) h)
         | N {uid=i} | L {leaf_uid=i} ->
-            EntrySet.singleton (Transition (entry_id, m, i))
+            EntrySet.singleton (Transition (entry_id, (tidy_range_match m), i))
       in
       EntrySet.union entries (_visit Wildcard entry_node)
     in
