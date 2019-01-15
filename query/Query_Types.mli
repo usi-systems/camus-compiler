@@ -66,8 +66,7 @@ module AtomicPredicate : sig
     [@@deriving compare, sexp]
 
   module ConstraintSet : sig
-    module FieldMap : module type of Map.Make(QueryField)
-    type t = ConstRange.t FieldMap.t
+    type t
       [@@deriving compare, sexp]
     val empty : t
     val add_constraint : t -> var_type -> t

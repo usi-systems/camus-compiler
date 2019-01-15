@@ -204,7 +204,16 @@ module AtomicPredicate = struct
   type var_type = t
     [@@deriving compare, sexp]
 
-  module ConstraintSet = struct
+  module DummyConstraintSet = struct
+    type t = int
+      [@@deriving compare, sexp]
+    let empty = 0
+    let add_constraint cs var = cs
+    let implies_true cs var = false
+    let implies_false cs var = raise (Failure "Unimplemented")
+  end
+
+  module PredicateConstraintSet = struct
     module FieldMap = Map.Make(QueryField)
     type t = ConstRange.t FieldMap.t
       [@@deriving compare, sexp]
@@ -235,8 +244,9 @@ module AtomicPredicate = struct
 
     let implies_false cs var =
       raise (Failure "Unimplemented")
-
   end
+
+  module ConstraintSet = DummyConstraintSet
 
 end
 
