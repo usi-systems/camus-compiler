@@ -8,6 +8,7 @@ def getFSM(entries):
     trans_for_state = {}
 
     for e in entries:
+        if e is None: continue
         s1, trans, s2 = None, None, None
 
         for f,v in e['match_fields'].iteritems():

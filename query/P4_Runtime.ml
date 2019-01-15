@@ -270,12 +270,13 @@ module P4Table = struct
       table_name act (format_matches matches) (format_args args) priority
 
 
-  let format_t t =
-    Caml.String.concat "\n"
+  let format_t oc t =
+    List.iter
       (List.map t.entries ~f:(format_entry t.name))
+      ~f:(Printf.fprintf oc "%s\n")
 
 
-  let json t =
+  let json (oc:Out_channel.t) t =
     let json_matches ms : string =
       Caml.String.concat ","
         (List.map2_exn t.fields ms ~f:(fun hf m ->
@@ -300,8 +301,9 @@ module P4Table = struct
       Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\": {%s}, \"action_name\": \"Camus.%s\"%s%s}"
         t.name (json_matches matches) act params priority
       in
-    Caml.String.concat ",\n"
+    List.iter
       (List.map t.entries ~f:json_entry)
+      ~f:(fun e -> Printf.fprintf oc "%s,\n" e)
 
 end
 
@@ -367,14 +369,15 @@ module P4RuntimeConf = struct
     }
 
 
-  let format_commands t =
-    Caml.String.concat "\n"
-      (List.map (String.Map.data t.tables) ~f:P4Table.format_t)
+  let format_commands oc t =
+      List.iter (String.Map.data t.tables) ~f:(P4Table.format_t oc)
 
-  let json t =
-    Printf.sprintf "[%s]"
-    (Caml.String.concat ",\n"
-      (List.map (String.Map.data t.tables) ~f:P4Table.json))
+  let dump_json oc t =
+    Printf.fprintf oc "[";
+    List.iter
+      (String.Map.data t.tables)
+      ~f:(P4Table.json oc);
+    Printf.fprintf oc "\nnull]"
 
   let format_mcast_groups t =
     Caml.String.concat "\n"
