@@ -276,7 +276,8 @@ module QueryAction = struct
     match t with
     | ForwardPort p ->
         Hashtbl.hash p
-    | _ -> raise (Failure "Cannot hash this type of action")
+    | P4Action (act, l) ->
+        (Hashtbl.hash act) + (List.fold_left ~init:0 ~f:(+) (List.map ~f:Hashtbl.hash l))
 
 end
 
@@ -344,6 +345,7 @@ module QueryRule = struct
       match l with
       | [] -> []
       | Query_Ast.NumberLit(i)::t -> i::(ints_of_lits t)
+      | Query_Ast.IpAddr(i)::t -> i::(ints_of_lits t)
       | _ -> raise (Failure "Must all be number literals")
     in
 

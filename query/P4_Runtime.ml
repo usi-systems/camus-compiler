@@ -288,7 +288,8 @@ module P4Table = struct
       | "set_next_state" -> "next_state"
       | "set_mgid" -> "mgid"
       | "set_egress_port" -> "port"
-      | _ -> raise (Failure "Unknown action") in
+      | _ ->  "arg1"
+    in
     let json_entry e =
       let (matches, (act, args)) = e in
       let priority = if is_ternary matches then
