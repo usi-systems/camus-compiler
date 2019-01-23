@@ -4,7 +4,7 @@ open Query_Types
 %}
 
 %token LPAREN RPAREN DOT COMMA
-%token QUERY_FIELD QUERY_FIELD_EXACT QUERY_FIELD_RANGE QUERY_FIELD_COUNTER
+%token QUERY_FIELD QUERY_FIELD_EXACT QUERY_FIELD_RANGE QUERY_FIELD_COUNTER QUERY_DEFAULT_ACTION
 %token QUERY_CONTROL
 %token<string> ID
 %token<string> NUMBER
@@ -18,6 +18,7 @@ query_stmt:
   | query_field_exact { $1 }
   | query_field_range { $1 }
   | query_field_counter { $1 }
+  | query_default_action { $1 }
   | query_control { $1 }
 
 
@@ -51,6 +52,13 @@ query_field_counter:
     (* TODO: parse the second arg (tumble time) *)
     Query_Types.QueryFieldCounter($3, 10000) }
 
+query_default_action:
+  | QUERY_DEFAULT_ACTION LPAREN action_ref RPAREN
+  {
+    Query_Types.QueryDefaultAction($3) }
+
+action_ref:
+  | ID { $1 }
 
 field_ref:
   | ID DOT ID

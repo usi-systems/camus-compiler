@@ -104,19 +104,23 @@ module P4Table = struct
     | [] -> []
     | h::t -> (Number h)::(_to_num_list t)
 
-  let _mk_term_action mgid_for_group al =
+  let _mk_term_action (qt:QueryTable.t) mgid_for_group al =
+    let default_act = match qt.default_action with
+      | None -> "query_drop"
+      | Some a -> a
+    in
     match al with
     | QueryAction.ForwardPort(p)::[] -> ("set_egress_port", [Number p])
     | QueryAction.P4Action(name, args)::[] -> (name, _to_num_list args)
     | _ when all_fwd_actions al ->  ("set_mgid", [Number (get_mgid mgid_for_group al)])
     (* no actions, drop *)
-    | [] -> ("query_drop", [])
+    | [] -> (default_act, [])
     | _ -> raise (Failure "Unable to generate table commands for this action or combination of actions")
 
-  let _translate_terminal mgid_for_group e =
+  let _translate_terminal (qt:QueryTable.t) mgid_for_group e =
     match e with
     | QueryTable.Terminal(s, al) ->
-        ([EqMatch(Number s, 16)], _mk_term_action mgid_for_group al)
+        ([EqMatch(Number s, 16)], _mk_term_action qt mgid_for_group al)
     | _ -> raise (Failure "This is not a transition table")
 
   let _translate_transition w e =
@@ -130,7 +134,7 @@ module P4Table = struct
     let entries =
       List.map
         qt.entries
-        ~f:(_translate_terminal mgid_for_group)
+        ~f:(_translate_terminal qt mgid_for_group)
     in
     let state_field = QueryField.HeaderField("query", "state", 1, 16) in
     [{

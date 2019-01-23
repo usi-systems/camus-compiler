@@ -25,6 +25,10 @@ let mk_window_meta_name f = f ^ "_reset_window"
 
 
 let gen_query_control (qs:QuerySpec.t) : string =
+  let default_action = match qs.default_action with
+    | None -> "query_drop"
+    | Some a -> a
+  in
   let tbls =
     List.fold_right
     qs.fields
@@ -100,8 +104,8 @@ control Camus(inout headers hdr,
 
   table query_actions {
     key = { meta.query.state: exact; }
-    actions = { query_drop; set_egress_port; set_mgid; }
+    actions = { " ^ default_action ^ "; set_egress_port; set_mgid; }
     size = 1024;
-    default_action = query_drop();
+    default_action = " ^ default_action ^ "();
   }\n\n" ^ tbls ^ control ^ "\n}"
 

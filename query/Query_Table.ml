@@ -39,6 +39,7 @@ module QueryTable = struct
     field: QueryField.t option;
     entries: entry list;
     is_terminal: bool;
+    default_action: string option;
     }
     [@@deriving compare, sexp]
 
@@ -182,6 +183,7 @@ module QueryTablePipeline = struct
     let actions_table = {
       field = None;
       is_terminal = true;
+      default_action = qs.default_action;
       entries =
         (List.map
           sorted_action_states
@@ -261,6 +263,7 @@ module QueryTablePipeline = struct
         field = Some qf;
         entries = entries;
         is_terminal = false;
+        default_action = None;
       }
     in
     {

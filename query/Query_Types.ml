@@ -11,6 +11,7 @@ type query_annotation =
   | QueryFieldExact of string * string * int
   | QueryFieldRange of string * string * int
   | QueryFieldCounter of string * int
+  | QueryDefaultAction of string
 
 
 module QueryConst = struct

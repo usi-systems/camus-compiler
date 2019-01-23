@@ -23,6 +23,7 @@ module QuerySpec = struct
     [@@deriving compare, sexp]
 
   type t = {
+             default_action : string option;
              fields : field list;
              counters: counter list}
            [@@deriving compare, sexp]
@@ -125,8 +126,14 @@ let load_query_spec (p4_path:string) : QuerySpec.t =
         | QueryFieldCounter(id, tumble_time) ->
             (HeaderField("stful_meta", id, RangeMatch, 16))::l
         | _ -> l) in
+  let rec find_default_action anns =
+    match anns with
+    | [] -> None
+    | QueryDefaultAction(a)::_ -> Some a
+    | _::t -> find_default_action t
+  in
   let counters = [] in
-  { fields = fs; counters = counters }
+  { default_action = (find_default_action anns); fields = fs; counters = counters }
 
 
 

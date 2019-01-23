@@ -27,6 +27,7 @@ module QueryTable : sig
     field: QueryField.t option;
     entries: entry list;
     is_terminal: bool;
+    default_action: string option;
     }
     [@@deriving compare, sexp]
 
