@@ -48,6 +48,7 @@ module P4Table = struct
 
   type value =
     | Number of int
+    | IP of int
     | String of string
     [@@deriving compare, sexp]
 
@@ -62,6 +63,7 @@ module P4Table = struct
     | LtMatch of value * width
     | GtMatch of value * width
     | RangeMatch of value * value * width
+    | LpmMatch of value * value * width
     [@@deriving compare, sexp]
 
   type entry =
@@ -86,8 +88,9 @@ module P4Table = struct
 
   let _translate_value v =
     match v with
-    | (QueryConst.Number i) | (QueryConst.IP i) | (QueryConst.MAC i) ->
+    | (QueryConst.Number i) | (QueryConst.MAC i) ->
         Number i
+    | (QueryConst.IP i) -> IP i
     | QueryConst.String s -> String s
 
   let _translate_match w m =
@@ -97,6 +100,8 @@ module P4Table = struct
     | QueryTable.GtMatch(v) -> [GtMatch(_translate_value v, w)]
     | QueryTable.RangeMatch(a, b) ->
         [RangeMatch(_translate_value a, _translate_value b, w)]
+    | QueryTable.LpmMatch(a, b) ->
+        [LpmMatch(_translate_value a, _translate_value b, w)]
     | QueryTable.Wildcard -> []
 
   let rec _to_num_list (l:int list) : value list =
@@ -155,17 +160,19 @@ module P4Table = struct
         qt.entries
         ~f:(_translate_transition w)
     in
-    let ex_entries, ra_entries, mi_entries =
+    let ex_entries, ra_entries, lpm_entries, mi_entries =
       List.fold_left
-      ~init:([], [], []) (* exact, range, miss *)
-      ~f:(fun (ex, ra, mi) e ->
+      ~init:([], [], [], []) (* exact, range, lpm, miss *)
+      ~f:(fun (ex, ra, lpm, mi) e ->
           match e with
           | (_::(EqMatch _)::_, _) ->
-              (e::ex, ra, mi)
+              (e::ex, ra, lpm, mi)
           | (_::((LtMatch _)|(GtMatch _)|(RangeMatch _))::_, _) ->
-              (ex, e::ra, mi)
+              (ex, e::ra, lpm, mi)
+          | (_::(LpmMatch _)::_, _) ->
+              (ex, ra, e::lpm, mi)
           | (_::[], _) ->
-              (ex, ra, e::mi)
+              (ex, ra, lpm, e::mi)
           | _ -> raise (Failure "Bad entries"))
       all_entries
     in
@@ -190,6 +197,16 @@ module P4Table = struct
           entries = ra_entries;
         }]
     in
+    let lpm_table =
+      if List.length lpm_entries = 0 then
+        []
+      else
+        [{
+          name = (field_to_table_name field) ^ "_lpm";
+          fields = [state_field; field];
+          entries = lpm_entries;
+        }]
+    in
     let mi_table =
       if List.length mi_entries = 0 then
         []
@@ -200,7 +217,7 @@ module P4Table = struct
           entries = mi_entries;
         }]
     in
-    ex_table @ ra_table @ mi_table
+    ex_table @ ra_table @ lpm_table @ mi_table
 
   let from_abstract (qt:QueryTable.t) (mgid_for_group:int IntSetMap.t) : t list =
     if qt.is_terminal then
@@ -222,10 +239,18 @@ module P4Table = struct
   let int_of_value v w =
     match v with
     | Number i -> i
+    | IP i -> i
     | String s -> binary_of_str (space_pad_str s (w/8))
 
   let format_value v =
-    Printf.sprintf "0x%x" (int_of_value v 0)
+    match v with
+    | IP i ->
+        Printf.sprintf "%d.%d.%d.%d"
+          ((i lsr 24) land 255)
+          ((i lsr 16) land 255)
+          ((i lsr 8)  land 255)
+          (i land 255)
+    | _ -> Printf.sprintf "0x%x" (int_of_value v 0)
 
   let format_args args =
     Caml.String.concat " "
@@ -245,6 +270,8 @@ module P4Table = struct
         Printf.sprintf "0x%x->0x%x" (int_of_value a w) (int_of_value b w)
     | RangeMatch(a, b, w) ->
         Printf.sprintf "0x%x->0x%x" (int_of_value b w) (int_of_value a w)
+    | LpmMatch(a, b, w) ->
+        Printf.sprintf "%s/%d" (format_value a) (int_of_value b w)
 
   let json_format_match m =
     match m with
@@ -258,6 +285,8 @@ module P4Table = struct
         Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
     | RangeMatch(a, b, w) ->
         Printf.sprintf "[%d, %d]" (int_of_value b w) (int_of_value a w)
+    | LpmMatch(a, b, w) ->
+        Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
 
   let format_matches ms =
     Caml.String.concat " "

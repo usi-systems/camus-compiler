@@ -10,6 +10,7 @@ module QuerySpec = struct
   type required_match =
     | ExactMatch
     | RangeMatch
+    | LpmMatch
     | ExactAndRangeMatch
     [@@deriving compare, sexp]
 
@@ -63,6 +64,7 @@ module QuerySpec = struct
       | Eq(HeaderField(h, f, _, _), c) -> Eq(HeaderField(h, f, getp h f, getw h f), c)
       | Lt(HeaderField(h, f, _, _), c) -> Lt(HeaderField(h, f, getp h f, getw h f), c)
       | Gt(HeaderField(h, f, _, _), c) -> Gt(HeaderField(h, f, getp h f, getw h f), c)
+      | Lpm(HeaderField(h, f, _, _), c1, c2) -> Lpm(HeaderField(h, f, getp h f, getw h f), c1, c2)
     in
     let rec update_form q =
       match q with
@@ -123,6 +125,8 @@ let load_query_spec (p4_path:string) : QuerySpec.t =
             (HeaderField(h, f, ExactMatch, w))::l
         | QueryFieldRange(h, f, w) ->
             (HeaderField(h, f, RangeMatch, w))::l
+        | QueryFieldLpm(h, f, w) ->
+            (HeaderField(h, f, LpmMatch, w))::l
         | QueryFieldCounter(id, tumble_time) ->
             (HeaderField("stful_meta", id, RangeMatch, 16))::l
         | _ -> l) in

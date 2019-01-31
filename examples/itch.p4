@@ -68,6 +68,7 @@ header itch_add_order_t {
     bit<32> price;
 }
 
+@pragma query_field_lpm(ipv4.dstAddr, 32)
 @pragma query_field(add_order.buy_sell_indicator, 8)
 @pragma query_field(add_order.price, 32)
 @pragma query_field(add_order.shares, 32)

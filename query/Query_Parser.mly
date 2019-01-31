@@ -19,6 +19,7 @@
 %token COMMA
 %token SEMICOLON
 %token LPAREN RPAREN
+%token FSLASH
 
 %type <Query_Ast.rule list> rule_list
 %type <Query_Ast.rule> rule
@@ -57,6 +58,7 @@ relExpr:
   | lhsExpr LT constExpr { Lt($1,$3) }
   | lhsExpr GT constExpr { Gt($1,$3) }
   | lhsExpr EQ constExpr { Eq($1,$3) }
+  | lhsExpr EQ constExpr FSLASH constExpr { Lpm($1,$3,$5) }
 
 lhsExpr:
   | fieldExpr { $1 }

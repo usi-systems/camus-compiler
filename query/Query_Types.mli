@@ -6,6 +6,7 @@ type query_annotation =
   | QueryField of string * string * int
   | QueryFieldExact of string * string * int
   | QueryFieldRange of string * string * int
+  | QueryFieldLpm of string * string * int
   | QueryFieldCounter of string * int
   | QueryDefaultAction of string
 
@@ -42,6 +43,7 @@ module AtomicPredicate : sig
     | Eq of QueryField.t * QueryConst.t
     | Lt of QueryField.t * QueryConst.t
     | Gt of QueryField.t * QueryConst.t
+    | Lpm of QueryField.t * QueryConst.t * QueryConst.t
     [@@deriving compare, sexp]
 
   type assignments

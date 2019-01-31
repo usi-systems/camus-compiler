@@ -62,6 +62,7 @@ rule token = parse
   | "query_field" { QUERY_FIELD }
   | "query_field_exact" { QUERY_FIELD_EXACT }
   | "query_field_range" { QUERY_FIELD_RANGE }
+  | "query_field_lpm"   { QUERY_FIELD_LPM }
   | "query_field_counter" { QUERY_FIELD_COUNTER }
   | "query_default_action" { QUERY_DEFAULT_ACTION }
   | "query_control" { QUERY_CONTROL }

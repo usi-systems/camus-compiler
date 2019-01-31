@@ -13,6 +13,7 @@ module QueryTable : sig
     | GtMatch of QueryConst.t
     | EqMatch of QueryConst.t
     | RangeMatch of QueryConst.t * QueryConst.t (* inclusive *)
+    | LpmMatch of QueryConst.t * QueryConst.t
     | Wildcard
     [@@deriving compare, sexp]
 

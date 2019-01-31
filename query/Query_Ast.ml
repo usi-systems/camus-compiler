@@ -16,6 +16,7 @@ type expr =
   | Not of expr
   | Call of string * expr list
   | Lt of expr * expr
+  | Lpm of expr * expr * expr
   | Gt of expr * expr
   | Eq of expr * expr
   | Field of string * string

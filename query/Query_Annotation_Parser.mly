@@ -4,7 +4,7 @@ open Query_Types
 %}
 
 %token LPAREN RPAREN DOT COMMA
-%token QUERY_FIELD QUERY_FIELD_EXACT QUERY_FIELD_RANGE QUERY_FIELD_COUNTER QUERY_DEFAULT_ACTION
+%token QUERY_FIELD QUERY_FIELD_EXACT QUERY_FIELD_RANGE QUERY_FIELD_LPM QUERY_FIELD_COUNTER QUERY_DEFAULT_ACTION
 %token QUERY_CONTROL
 %token<string> ID
 %token<string> NUMBER
@@ -17,6 +17,7 @@ query_stmt:
   | query_field { $1 }
   | query_field_exact { $1 }
   | query_field_range { $1 }
+  | query_field_lpm { $1 }
   | query_field_counter { $1 }
   | query_default_action { $1 }
   | query_control { $1 }
@@ -45,6 +46,13 @@ query_field_range:
     let h,f = $3 in
     let w = int_of_string $5 in
     Query_Types.QueryFieldRange(h, f, w) }
+
+query_field_lpm:
+  | QUERY_FIELD_LPM LPAREN field_ref COMMA const_expr RPAREN
+  {
+    let h,f = $3 in
+    let w = int_of_string $5 in
+    Query_Types.QueryFieldLpm(h, f, w) }
 
 query_field_counter:
   | QUERY_FIELD_COUNTER LPAREN ID COMMA RPAREN

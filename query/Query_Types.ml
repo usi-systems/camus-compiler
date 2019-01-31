@@ -10,6 +10,7 @@ type query_annotation =
   | QueryField of string * string * int
   | QueryFieldExact of string * string * int
   | QueryFieldRange of string * string * int
+  | QueryFieldLpm of string * string * int
   | QueryFieldCounter of string * int
   | QueryDefaultAction of string
 
@@ -94,6 +95,7 @@ module AtomicPredicate = struct
     | Eq of QueryField.t * QueryConst.t
     | Lt of QueryField.t * QueryConst.t
     | Gt of QueryField.t * QueryConst.t
+    | Lpm of QueryField.t * QueryConst.t * QueryConst.t
     [@@deriving compare, sexp]
 
   type assignments = QueryConst.t AssignmentMap.t
@@ -104,7 +106,14 @@ module AtomicPredicate = struct
     | (Gt(x, Number n1), Gt(y, Number n2)) when x=y -> Int.compare n2 n1
     | (Lt(x, Number n1), Lt(y, Number n2)) when x=y -> Int.compare n1 n2
     | (Eq(x, Number n1), Eq(y, Number n2)) when x=y -> Int.compare n1 n2
+    | (Eq(x, IP a1), Eq(y, IP a2)) when x=y -> Int.compare a1 a2
+    | (Lpm(x, IP a1, Number m1), Lpm(y, IP a2, Number m2)) when x=y ->
+        if a1=a2 then Int.compare m1 m2 else Int.compare a1 a2
+    (* Eq < Lpm *)
+    | (Eq(x, _), Lpm(y, _, _)) when x=y -> -1
+    | (Lpm(x, _, _), Eq(y, _)) when x=y -> 1
     (* Lt < Gt < Eq *)
+    | (Eq(x, _), Lt(y, _)) when x=y -> 1
     | (Eq(x, _), Lt(y, _)) when x=y -> 1
     | (Eq(x, _), Gt(y, _)) when x=y -> 1
     | (Lt(x, _), Eq(y, _)) when x=y -> -1
@@ -120,7 +129,7 @@ module AtomicPredicate = struct
     | (Gt(x, _), Eq(y, _)) when x=y -> 1
     | (Gt(x, _), Lt(y, _)) when x=y -> 1
     *)
-    | ((Eq(x, _) | Lt(x, _) | Gt(x, _)), (Eq(y, _) | Lt(y, _) | Gt(y, _))) ->
+    | ((Eq(x, _) | Lt(x, _) | Gt(x, _) | Lpm(x, _, _)), (Eq(y, _) | Lt(y, _) | Gt(y, _) | Lpm(y, _, _))) ->
         QueryField.compare x y
 
   let format_t t =
@@ -128,6 +137,7 @@ module AtomicPredicate = struct
     | Lt(qf, c) -> Printf.sprintf "%s<%s" (QueryField.format_t qf) (QueryConst.format_t c)
     | Gt(qf, c) -> Printf.sprintf "%s>%s" (QueryField.format_t qf) (QueryConst.format_t c)
     | Eq(qf, c) -> Printf.sprintf "%s=%s" (QueryField.format_t qf) (QueryConst.format_t c)
+    | Lpm(qf, c1, c2) -> Printf.sprintf "%s=%s/%s" (QueryField.format_t qf) (QueryConst.format_t c1) (QueryConst.format_t c2)
 
   let disjoint t1 t2 =
     match (t1, t2) with
@@ -138,10 +148,12 @@ module AtomicPredicate = struct
     | (Eq(b, Number y), Lt(a, Number x)) when a=b -> y>=x
     | (Lt(a, Number x), Gt(b, Number y)) when a=b -> x<=(y+1)
     | (Gt(b, Number y), Lt(a, Number x)) when a=b -> x<=(y+1)
+    | (Lpm(a, IP a1, Number m1), Lpm(b, IP a2, Number m2)) when a=b -> a1<>a2
     | _ -> false
 
   let subset sub sup =
     match (sub, sup) with
+    (* TODO: check for subset IP prefixes *)
     | (Gt(a, Number x), Gt(b, Number y)) when a=b -> x>=y
     | (Lt(a, Number x), Lt(b, Number y)) when a=b -> x<=y
     | (Eq(a, Number x), Gt(b, Number y)) when a=b -> x>y
@@ -150,7 +162,7 @@ module AtomicPredicate = struct
 
   let field t =
     match t with
-    | Lt(qf, _) | Gt(qf, _) | Eq(qf, _) -> qf
+    | Lt(qf, _) | Gt(qf, _) | Eq(qf, _) | Lpm(qf, _, _) -> qf
 
   let independent t1 t2 =
     field t1 <> field t2
@@ -233,6 +245,7 @@ module AtomicPredicate = struct
         | Eq (_, x) -> ConstRange.set_eq cr x
         | Lt (_, x) -> ConstRange.set_lt cr x
         | Gt (_, x) -> ConstRange.set_gt cr x
+        | Lpm _ -> cr (* TODO: add a Lpm to a constraint set *)
       in
       FieldMap.add cs ~key:qf ~data:cr2
 
@@ -242,6 +255,7 @@ module AtomicPredicate = struct
       | Eq (_, x) -> ConstRange.implies_true_eq cr x
       | Lt (_, x) -> ConstRange.implies_true_lt cr x
       | Gt (_, x) -> ConstRange.implies_true_gt cr x
+      | Lpm _ -> false (* TODO we should check this *)
 
     let implies_false cs var =
       raise (Failure "Unimplemented")
@@ -335,6 +349,10 @@ module QueryRule = struct
       | Query_Ast.Gt(Query_Ast.Call(func, f::_), y) ->
           let hf = QueryField.HeaderField("stful_meta", str_of_exp f, 0, 0) in
           Atom(AtomicPredicate.Gt(hf, const_of_exp y))
+      | Query_Ast.Lpm(Query_Ast.Field(h, f), addr, mask) ->
+          let hf = QueryField.HeaderField(h, f, 0, 0) in
+          Atom(AtomicPredicate.Lpm(hf, const_of_exp addr, const_of_exp mask))
+      | Query_Ast.Lpm _ -> raise (Failure "Bad format for Lpm")
       | Query_Ast.Gt _ -> raise (Failure "Bad format for Gt")
       | Query_Ast.Call _ -> raise (Failure "Unsupported Call")
       | (Query_Ast.Field _) | (Query_Ast.StringLit _)

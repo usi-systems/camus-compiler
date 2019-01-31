@@ -25,6 +25,7 @@ module QueryTable = struct
     | GtMatch of QueryConst.t
     | EqMatch of QueryConst.t
     | RangeMatch of QueryConst.t * QueryConst.t (* inclusive *)
+    | LpmMatch of QueryConst.t * QueryConst.t
     | Wildcard
     [@@deriving compare, sexp]
 
@@ -52,6 +53,8 @@ module QueryTable = struct
     | (RangeMatch (x, y), RangeMatch (j, k)) ->
         let c = QueryConst.compare x j in
         if c = 0 then QueryConst.compare y k else c
+    | LpmMatch (x, y), LpmMatch (j, k) ->
+        if x=j then QueryConst.compare y k else QueryConst.compare x j
     | (EqMatch _, _) -> -1
     | (_, EqMatch _) -> 1
     | (RangeMatch _, _) -> -1
@@ -60,6 +63,8 @@ module QueryTable = struct
     | (_, LtMatch _) -> 1
     | (GtMatch _, _) -> -1
     | (_, GtMatch _) -> 1
+    | (LpmMatch _, _) -> -1
+    | (_, LpmMatch _) -> 1
 
   let cmp_entry a b =
     match (a, b) with
@@ -83,6 +88,8 @@ module QueryTable = struct
     | GtMatch(c) -> Printf.sprintf "> %s" (QueryConst.format_t c)
     | RangeMatch(c1, c2) ->
         Printf.sprintf "%s -> %s" (QueryConst.format_t c1) (QueryConst.format_t c2)
+    | LpmMatch(c1, c2) ->
+        Printf.sprintf "%s/%s" (QueryConst.format_t c1) (QueryConst.format_t c2)
     | Wildcard -> "*"
 
   let table_name t =
@@ -196,6 +203,7 @@ module QueryTablePipeline = struct
       | Lt (_, x) -> LtMatch x
       | Gt (_, x) -> GtMatch x
       | Eq (_, x) -> EqMatch x
+      | Lpm (_, a, b) -> LpmMatch (a, b)
     in
 
     (* This assumes that m and the new pred are overlapping *)
@@ -207,6 +215,7 @@ module QueryTablePipeline = struct
       match m, m2 with
       | Wildcard, _ | _, Wildcard -> m2
       | EqMatch x, _ | _, EqMatch x -> EqMatch x
+      | LpmMatch _, _ | _, LpmMatch _ -> raise (Failure "Cannot union LPM with other match types")
       | GtMatch x1, GtMatch x2 -> GtMatch (QueryConst.max x1 x2)
       | LtMatch y1, LtMatch y2 -> LtMatch (QueryConst.min y1 y2)
       | LtMatch x, GtMatch y -> mk_range y x

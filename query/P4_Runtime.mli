@@ -9,6 +9,7 @@ module P4Table : sig
 
   type value =
     | Number of int
+    | IP of int
     | String of string
     [@@deriving compare, sexp]
 
@@ -23,6 +24,7 @@ module P4Table : sig
     | LtMatch of value * width
     | GtMatch of value * width
     | RangeMatch of value * value * width
+    | LpmMatch of value * value * width
     [@@deriving compare, sexp]
 
   type entry =

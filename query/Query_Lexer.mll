@@ -97,6 +97,7 @@ rule main =
   | ";"                { SEMICOLON }
   | "("                { LPAREN }
   | ")"                { RPAREN }
+  | "/"                { FSLASH }
   | "\""               {
                          let s = string_lit "" lexbuf in
                          STRING_LIT(info lexbuf,s)
