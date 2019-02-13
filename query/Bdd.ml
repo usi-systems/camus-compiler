@@ -367,6 +367,9 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
     Printf.fprintf oc "%s" (format_t bdd);
     Out_channel.close oc
 
+  let compare t1 t2 =
+    if t1.table = t2.table then 0 else 1
+
 
   let init () =
     let empty_leaf = L {leaf_uid = 1; labels = LabelSet.empty} in

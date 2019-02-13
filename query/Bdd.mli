@@ -103,7 +103,9 @@ module Bdd (V: BddVar) (L: BddLabel) : sig
   val eval_bdd : t -> V.assignments -> node -> LabelSet.t
   val find_paths : ?path:Conj.t -> node -> ((Conj.t * LabelSet.t) list)
 
+  val fmt_lbls : LabelSet.t -> string
   val format_t : ?graph_name:string -> t -> string
+  val compare : t -> t -> int
   
   val fold_df : ('a -> node option -> node -> 'a) -> 'a -> t -> 'a
   val fold_tree : ('b -> node -> (bool * 'b)) -> 'b -> node -> 'b list

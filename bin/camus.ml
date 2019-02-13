@@ -54,12 +54,16 @@ let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
            match parse_rules_file fn with
            | `Ok rules_ast ->
                let open Query_Bdd in
+               let open Query_Counter in
                let open Query_Table in
                let open Query_Spec in
                let open P4_Runtime in
                let rules = Query_Types.QueryRule.from_ast rules_ast in
                let rules = QuerySpec.prioritize_fields query_spec rules in
 
+               let tables = tables_from_rules query_spec rules in
+
+               (*
                let default_slices = max 2 ((List.length rules) / 123) in (* this seems to be the sweet spot *)
                let slices = match slices with
                  | None -> default_slices
@@ -93,6 +97,7 @@ let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
                let () = Out_channel.write_all (out_base ^ "_mcast_groups.txt")
                           ~data:(P4RuntimeConf.format_mcast_groups rtc) in
                let () = Format.eprintf "[mcast: %s_mcast_groups.txt]@\n%!" out_base in
+              *)
                ()
            | `Error msg ->
                Format.eprintf "@[%s@\n%!@]" msg
