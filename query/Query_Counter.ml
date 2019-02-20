@@ -103,6 +103,9 @@ module CounterTable = struct
     | (m, lbls, eid)::tbl2 -> Printf.sprintf "%s -> [%s] %d\n%s"
           (format_match m) (CounterTableBdd.fmt_lbls lbls) eid (format_t tbl2)
 
+  let size (tbl:t) : int =
+    List.length tbl
+
   let give_id (entries: t) : t =
     List.mapi entries ~f:(fun i (fm, lbls, _) -> (fm, lbls, i+1))
 
@@ -140,6 +143,7 @@ module AggTable = struct
 
   let format_t (tbl:t) : string =
     let fields = match tbl with (m,_)::_ -> FieldMap.keys m | [] -> [] in
+    let tbl_stats = Printf.sprintf "%d agg table entries\n" (List.length tbl) in
     let header = List.fold_left ~init:"" ~f:(fun s (h, f) ->
       s ^ (Printf.sprintf "%s.%s\t" h f)) fields in
     let rec _rec (tbl:t) : string =
@@ -148,11 +152,12 @@ module AggTable = struct
       | (m, a)::tbl2 ->
           (Printf.sprintf "%s -> %s\n" (format_match m fields) (format_action_set a)) ^ (_rec tbl2)
     in
-    header ^ "\n" ^ (_rec tbl)
+    tbl_stats ^ header ^ "\n" ^ (_rec tbl)
 
   let format_field_tables (field_tables:CounterTable.t FieldMap.t) : string =
     FieldMap.fold field_tables ~init:"" ~f:(fun ~key:(h,f) ~data:tbl s ->
-      s ^ (Printf.sprintf "----- %s.%s -----\n%s" h f (CounterTable.format_t tbl)))
+      s ^ (Printf.sprintf "----- %s.%s (%d entries) -----\n%s" h f
+              (CounterTable.size tbl) (CounterTable.format_t tbl)))
 
   let make (rule_map:QueryAction.t list IntMap.t) (field_tables:CounterTable.t FieldMap.t) : t =
     Printf.printf "\n%s\n" (format_field_tables field_tables);
@@ -180,9 +185,11 @@ module AggTable = struct
     in
     let merge_rule ~key:rule_id ~data:_ entries =
       let rule_entries = entries_for_rule rule_id in
+      (*
       Printf.printf "Rule_id: %d\n" rule_id;
       FieldMap.iteri rule_entries ~f:(fun ~key:(h, f) ~data:el ->
         Printf.printf "\t%s.%s: [%s]\n" h f (int_list_to_str el));
+      *)
       let rec add_rules entries ms remaining_fields =
         match remaining_fields with
         | [] -> add_match_set entries ms rule_id
@@ -205,7 +212,9 @@ let tables_from_rules (qs:QuerySpec.t) rules =
   let add_pred rule_id ~key:field ~data:preds field_bdds =
     FieldMap.update field_bdds field ~f:(fun x ->
       let bdd = (match x with None -> CounterTableBdd.init () | Some bdd -> bdd) in
+      (*
       Printf.printf "rule%d: %s\n" rule_id (CounterTableBdd.Conj.format_t preds);
+      *)
       let lbls = CounterTableBdd.LabelSet.of_list [rule_id] in
       bdd.root <- CounterTableBdd.merge_nodes bdd bdd.root (CounterTableBdd.conj_to_bdd bdd preds lbls);
       bdd)
