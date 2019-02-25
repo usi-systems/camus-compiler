@@ -160,7 +160,9 @@ module AggTable = struct
               (CounterTable.size tbl) (CounterTable.format_t tbl)))
 
   let make (rule_map:QueryAction.t list IntMap.t) (field_tables:CounterTable.t FieldMap.t) : t =
+   (*
     Printf.printf "\n%s\n" (format_field_tables field_tables);
+    *)
     let fields : (string * string) list = FieldMap.keys field_tables in
     let all_entry_ids : entry_id list FieldMap.t =
       FieldMap.map field_tables ~f:(fun tbl -> List.map tbl ~f:(fun (_, _, entry_id) -> entry_id))
@@ -251,7 +253,12 @@ let tables_from_rules (qs:QuerySpec.t) rules =
     FieldMap.map field_bdds ~f:CounterTable.from_bdd
   in
   let agg_table : AggTable.t = AggTable.make rule_map field_tables in
+  FieldMap.iteri field_tables ~f:(fun ~key:(h, f) ~data:tbl ->
+      Printf.printf "table %s.%s: %d entries\n" h f (CounterTable.size tbl));
+  Printf.printf "Agg table: %d entries\n" (List.length agg_table);
+  (*
   Printf.printf "\n%s\n" (AggTable.format_t agg_table);
+  *)
   agg_table
   
 
