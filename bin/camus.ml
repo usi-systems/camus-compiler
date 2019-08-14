@@ -22,7 +22,9 @@ let parse_rules_string string =
 
 let parse_rules_file filename =
   Query_Lexer.setup filename;
-  let s = In_channel.read_all filename in
+  let s = if filename = "-" then
+    In_channel.input_all In_channel.stdin else
+      In_channel.read_all filename in
   parse_rules_string s
 
 let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
