@@ -126,9 +126,12 @@ module AtomicPredicate = struct
     | (Lt(x, Number n1), Lt(y, Number n2)) when x=y -> Int.compare n1 n2
     | (Eq(x, Number n1), Eq(y, Number n2)) when x=y -> Int.compare n1 n2
     | (Eq(x, IP a1), Eq(y, IP a2)) when x=y -> Int.compare a1 a2
-    | (Eq(x, ((IPv6 _) as a1)), Eq(y, ((IPv6 _) as a2))) when x=y -> QueryConst.compare a1 a2
     | (Lpm(x, IP a1, Number m1), Lpm(y, IP a2, Number m2)) when x=y ->
         if a1=a2 then Int.compare m1 m2 else Int.compare a1 a2
+    | (Eq(x, ((IPv6 _) as a1)), Eq(y, ((IPv6 _) as a2))) when x=y ->
+        QueryConst.compare a1 a2
+    | (Lpm(x, ((IPv6 _) as a1), Number m1), Lpm(y, ((IPv6 _) as a2), Number m2)) when x=y ->
+        if a1=a2 then Int.compare m1 m2 else QueryConst.compare a1 a2
     (* Eq < Lpm *)
     | (Eq(x, _), Lpm(y, _, _)) when x=y -> -1
     | (Lpm(x, _, _), Eq(y, _)) when x=y -> 1
@@ -169,6 +172,7 @@ module AtomicPredicate = struct
     | (Lt(a, Number x), Gt(b, Number y)) when a=b -> x<=(y+1)
     | (Gt(b, Number y), Lt(a, Number x)) when a=b -> x<=(y+1)
     | (Lpm(a, IP a1, Number m1), Lpm(b, IP a2, Number m2)) when a=b -> a1<>a2
+    | (Lpm(a, ((IPv6 _) as a1), Number m1), Lpm(b, ((IPv6 _) as a2), Number m2)) when a=b -> a1<>a2
     | _ -> false
 
   let subset sub sup =
