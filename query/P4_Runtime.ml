@@ -49,6 +49,7 @@ module P4Table = struct
   type value =
     | Number of int
     | IP of int
+    | IPv6 of int * int * int * int
     | String of string
     [@@deriving compare, sexp]
 
@@ -91,6 +92,7 @@ module P4Table = struct
     | (QueryConst.Number i) | (QueryConst.MAC i) ->
         Number i
     | (QueryConst.IP i) -> IP i
+    | QueryConst.IPv6 (a, b, c, d) -> IPv6 (a, b, c, d)
     | QueryConst.String s -> String s
 
   let _translate_match w m =
@@ -236,11 +238,18 @@ module P4Table = struct
   let space_pad_str s n : string =
     s ^ (String.make (max 0 (n - (String.length s))) ' ')
 
-  let int_of_value v w =
+  let str_of_value v w inc =
     match v with
-    | Number i -> i
-    | IP i -> i
-    | String s -> binary_of_str (space_pad_str s (w/8))
+    | Number i -> Printf.sprintf "%u" (i + inc)
+    | IP i -> Printf.sprintf "%u" (i + inc)
+    | IPv6 (a, b, c, d) ->
+        let open Stdint.Uint128 in
+        to_string
+        (logor (shift_left (of_int a) 96)
+        (logor (shift_left (of_int b) 64)
+        (logor (shift_left (of_int c) 32)
+                           (of_int d))))
+    | String s -> Printf.sprintf "%u" (binary_of_str (space_pad_str s (w/8)))
 
   let format_value v =
     match v with
@@ -250,7 +259,7 @@ module P4Table = struct
           ((i lsr 16) land 255)
           ((i lsr 8)  land 255)
           (i land 255)
-    | _ -> Printf.sprintf "0x%x" (int_of_value v 0)
+    | _ -> Printf.sprintf "%s" (str_of_value v 0 0)
 
   let format_args args =
     Caml.String.concat " "
@@ -263,30 +272,30 @@ module P4Table = struct
     | EqMatch(v, _) ->
         format_value v
     | LtMatch (v, w) ->
-        Printf.sprintf "0x00->0x%x" ((int_of_value v w)-1)
+        Printf.sprintf "0x00->%s" (str_of_value v w (-1))
     | GtMatch (v, w) ->
-        Printf.sprintf "0x%x->0x%x" ((int_of_value v w)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value a w) (int_of_value b w)
+        Printf.sprintf "%s->0x%x" (str_of_value v w 1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (str_of_value a w 0) < (str_of_value b w 0) ->
+        Printf.sprintf "%s->%s" (str_of_value a w 0) (str_of_value b w 0)
     | RangeMatch(a, b, w) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value b w) (int_of_value a w)
+        Printf.sprintf "%s->%s" (str_of_value b w 0) (str_of_value a w 0)
     | LpmMatch(a, b, w) ->
-        Printf.sprintf "%s/%d" (format_value a) (int_of_value b w)
+        Printf.sprintf "%s/%s" (format_value a) (str_of_value b w 0)
 
   let json_format_match m =
     match m with
     | EqMatch(v, w) ->
-        Printf.sprintf "[%u]" (int_of_value v w)
+        Printf.sprintf "[%s]" (str_of_value v w 0)
     | LtMatch (v, w) ->
-        Printf.sprintf "[0, %d]" ((int_of_value v w)-1)
+        Printf.sprintf "[0, %s]" (str_of_value v w (-1))
     | GtMatch (v, w) ->
-        Printf.sprintf "[%d, %d]" ((int_of_value v w)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
-        Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
+        Printf.sprintf "[%s, %d]" (str_of_value v w 1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (str_of_value a w 0) < (str_of_value b w 0) ->
+        Printf.sprintf "[%s, %s]" (str_of_value a w 0) (str_of_value b w 0)
     | RangeMatch(a, b, w) ->
-        Printf.sprintf "[%d, %d]" (int_of_value b w) (int_of_value a w)
+        Printf.sprintf "[%s, %s]" (str_of_value b w 0) (str_of_value a w 0)
     | LpmMatch(a, b, w) ->
-        Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
+        Printf.sprintf "[%s, %s]" (str_of_value a w 0) (str_of_value b w 0)
 
   let format_matches ms =
     Caml.String.concat " "
@@ -329,8 +338,8 @@ module P4Table = struct
         Printf.sprintf ", \"priority\": %d" (get_priority ()) else "" in
       let params =
         if (List.length args) > 0 then
-          (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act)
-          (int_of_value  (List.hd_exn args) 0)
+          (Printf.sprintf ", \"action_params\": {\"%s\": %s}" (arg_name act)
+          (str_of_value  (List.hd_exn args) 0 0)
           ) else "" in
       Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\": {%s}, \"action_name\": \"Camus.%s\"%s%s}"
         t.name (json_matches matches) act params priority

@@ -10,6 +10,7 @@ module P4Table : sig
   type value =
     | Number of int
     | IP of int
+    | IPv6 of int * int * int * int
     | String of string
     [@@deriving compare, sexp]
 

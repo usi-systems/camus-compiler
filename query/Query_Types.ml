@@ -19,6 +19,7 @@ module QueryConst = struct
   type t =
     | Number of int
     | IP of int
+    | IPv6 of int * int * int * int
     | MAC of int
     | String of string
     [@@deriving compare, sexp]
@@ -34,6 +35,12 @@ module QueryConst = struct
           ((i lsr 16) land 255)
           ((i lsr 8)  land 255)
           (i land 255)
+    | IPv6(a, b, c, d) ->
+        Printf.sprintf "%x:%x:%x:%x:%x:%x:%x:%x"
+          (a lsr 16) (a land 0xffff)
+          (b lsr 16) (b land 0xffff)
+          (c lsr 16) (c land 0xffff)
+          (d lsr 16) (d land 0xffff)
     | MAC(i) ->
         Printf.sprintf "%d:%d:%d:%d:%d:%d"
           ((i lsr 40) land 255)
@@ -43,8 +50,20 @@ module QueryConst = struct
           ((i lsr 8)  land 255)
           (i land 255)
 
+  let rec compare_ipv6 l1 l2 =
+    match (l1, l2) with
+    | h1::t1, h2::t2 ->
+        let c = Pervasives.compare h1 h2 in
+        if c = 0 then compare_ipv6 t1 t2 else c
+    | [], [] -> 0
+    | _ -> raise (Failure "Addresses must have same size")
+
   let compare a b =
     match (a, b) with
+    | (IPv6 (a1, a2, a3, a4), IPv6 (b1, b2, b3, b4)) ->
+        compare_ipv6 [a1; a2; a3; a4] [b1; b2; b3; b4]
+    | (_, IPv6 _) -> 1
+    | (IPv6 _, _) -> -1
     | (((Number x)|(IP x)|(MAC x)), ((Number y)|(IP y)|(MAC y))) ->
         Pervasives.compare x y
     | (((Number _)|(IP _)|(MAC _)), String s) -> 1
@@ -107,6 +126,7 @@ module AtomicPredicate = struct
     | (Lt(x, Number n1), Lt(y, Number n2)) when x=y -> Int.compare n1 n2
     | (Eq(x, Number n1), Eq(y, Number n2)) when x=y -> Int.compare n1 n2
     | (Eq(x, IP a1), Eq(y, IP a2)) when x=y -> Int.compare a1 a2
+    | (Eq(x, ((IPv6 _) as a1)), Eq(y, ((IPv6 _) as a2))) when x=y -> QueryConst.compare a1 a2
     | (Lpm(x, IP a1, Number m1), Lpm(y, IP a2, Number m2)) when x=y ->
         if a1=a2 then Int.compare m1 m2 else Int.compare a1 a2
     (* Eq < Lpm *)
@@ -312,6 +332,7 @@ module QueryRule = struct
       | Query_Ast.IpAddr i -> IP i
       | Query_Ast.MacAddr i -> MAC i
       | Query_Ast.StringLit s -> String s
+      | Query_Ast.Ip6Addr (a, b, c, d) -> IPv6 (a, b, c, d)
       | _ -> raise (Failure "Should be a const value")
     in
     let str_of_exp e =
@@ -356,7 +377,7 @@ module QueryRule = struct
       | Query_Ast.Gt _ -> raise (Failure "Bad format for Gt")
       | Query_Ast.Call _ -> raise (Failure "Unsupported Call")
       | (Query_Ast.Field _) | (Query_Ast.StringLit _)
-      | (Query_Ast.NumberLit _) | (Query_Ast.IpAddr _) | (Query_Ast.MacAddr _) ->
+      | (Query_Ast.NumberLit _) | (Query_Ast.IpAddr _) | (Query_Ast.Ip6Addr _) |(Query_Ast.MacAddr _) ->
           raise (Failure "Unexpected value here")
     in
 

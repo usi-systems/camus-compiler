@@ -14,6 +14,7 @@ module QueryConst : sig
   type t =
     | Number of int
     | IP of int
+    | IPv6 of int * int * int * int
     | MAC of int
     | String of string
     [@@deriving compare, sexp]

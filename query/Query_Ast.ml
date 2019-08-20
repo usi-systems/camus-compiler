@@ -23,6 +23,7 @@ type expr =
   | StringLit of string
   | NumberLit of int
   | IpAddr of int
+  | Ip6Addr of int * int * int * int
   | MacAddr of int
 
 type action_list = expr list
