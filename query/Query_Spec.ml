@@ -48,7 +48,10 @@ module QuerySpec = struct
       | _::tail -> findrec tail
       | [] -> raise (Failure "Could not find width for header field")
     in
-    findrec t.fields
+    if h="stful_meta" then
+      32
+    else
+      findrec t.fields
 
   let prioritize_fields (qs:t) (rules:QueryRule.t list) =
     let open QueryFormula in
@@ -130,13 +133,20 @@ let load_query_spec (p4_path:string) : QuerySpec.t =
         | QueryFieldCounter(id, tumble_time) ->
             (HeaderField("stful_meta", id, RangeMatch, 16))::l
         | _ -> l) in
+  let counters =
+    List.fold_left
+    anns
+    ~init:[]
+    ~f:(fun l a ->
+        match a with
+        | QueryFieldCounter(id, tumble_time) -> (id, tumble_time)::l
+        | _ -> l) in
   let rec find_default_action anns =
     match anns with
     | [] -> None
     | QueryDefaultAction(a)::_ -> Some a
     | _::t -> find_default_action t
   in
-  let counters = [] in
   { default_action = (find_default_action anns); fields = fs; counters = counters }
 
 
