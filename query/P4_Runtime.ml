@@ -48,6 +48,8 @@ module P4Table = struct
 
   type value =
     | Number of int
+    | IP of int
+    | IPv6 of int * int * int * int
     | String of string
     [@@deriving compare, sexp]
 
@@ -62,6 +64,7 @@ module P4Table = struct
     | LtMatch of value * width
     | GtMatch of value * width
     | RangeMatch of value * value * width
+    | LpmMatch of value * value * width
     [@@deriving compare, sexp]
 
   type entry =
@@ -86,8 +89,10 @@ module P4Table = struct
 
   let _translate_value v =
     match v with
-    | (QueryConst.Number i) | (QueryConst.IP i) ->
+    | (QueryConst.Number i) | (QueryConst.MAC i) ->
         Number i
+    | (QueryConst.IP i) -> IP i
+    | QueryConst.IPv6 (a, b, c, d) -> IPv6 (a, b, c, d)
     | QueryConst.String s -> String s
 
   let _translate_match w m =
@@ -97,6 +102,8 @@ module P4Table = struct
     | QueryTable.GtMatch(v) -> [GtMatch(_translate_value v, w)]
     | QueryTable.RangeMatch(a, b) ->
         [RangeMatch(_translate_value a, _translate_value b, w)]
+    | QueryTable.LpmMatch(a, b) ->
+        [LpmMatch(_translate_value a, _translate_value b, w)]
     | QueryTable.Wildcard -> []
 
   let rec _to_num_list (l:int list) : value list =
@@ -104,19 +111,23 @@ module P4Table = struct
     | [] -> []
     | h::t -> (Number h)::(_to_num_list t)
 
-  let _mk_term_action mgid_for_group al =
+  let _mk_term_action (qt:QueryTable.t) mgid_for_group al =
+    let default_act = match qt.default_action with
+      | None -> "query_drop"
+      | Some a -> a
+    in
     match al with
     | QueryAction.ForwardPort(p)::[] -> ("set_egress_port", [Number p])
     | QueryAction.P4Action(name, args)::[] -> (name, _to_num_list args)
     | _ when all_fwd_actions al ->  ("set_mgid", [Number (get_mgid mgid_for_group al)])
     (* no actions, drop *)
-    | [] -> ("query_drop", [])
+    | [] -> (default_act, [])
     | _ -> raise (Failure "Unable to generate table commands for this action or combination of actions")
 
-  let _translate_terminal mgid_for_group e =
+  let _translate_terminal (qt:QueryTable.t) mgid_for_group e =
     match e with
     | QueryTable.Terminal(s, al) ->
-        ([EqMatch(Number s, 16)], _mk_term_action mgid_for_group al)
+        ([EqMatch(Number s, 16)], _mk_term_action qt mgid_for_group al)
     | _ -> raise (Failure "This is not a transition table")
 
   let _translate_transition w e =
@@ -130,7 +141,7 @@ module P4Table = struct
     let entries =
       List.map
         qt.entries
-        ~f:(_translate_terminal mgid_for_group)
+        ~f:(_translate_terminal qt mgid_for_group)
     in
     let state_field = QueryField.HeaderField("query", "state", 1, 16) in
     [{
@@ -151,17 +162,19 @@ module P4Table = struct
         qt.entries
         ~f:(_translate_transition w)
     in
-    let ex_entries, ra_entries, mi_entries =
+    let ex_entries, ra_entries, lpm_entries, mi_entries =
       List.fold_left
-      ~init:([], [], []) (* exact, range, miss *)
-      ~f:(fun (ex, ra, mi) e ->
+      ~init:([], [], [], []) (* exact, range, lpm, miss *)
+      ~f:(fun (ex, ra, lpm, mi) e ->
           match e with
           | (_::(EqMatch _)::_, _) ->
-              (e::ex, ra, mi)
+              (e::ex, ra, lpm, mi)
           | (_::((LtMatch _)|(GtMatch _)|(RangeMatch _))::_, _) ->
-              (ex, e::ra, mi)
+              (ex, e::ra, lpm, mi)
+          | (_::(LpmMatch _)::_, _) ->
+              (ex, ra, e::lpm, mi)
           | (_::[], _) ->
-              (ex, ra, e::mi)
+              (ex, ra, lpm, e::mi)
           | _ -> raise (Failure "Bad entries"))
       all_entries
     in
@@ -186,6 +199,16 @@ module P4Table = struct
           entries = ra_entries;
         }]
     in
+    let lpm_table =
+      if List.length lpm_entries = 0 then
+        []
+      else
+        [{
+          name = (field_to_table_name field) ^ "_lpm";
+          fields = [state_field; field];
+          entries = lpm_entries;
+        }]
+    in
     let mi_table =
       if List.length mi_entries = 0 then
         []
@@ -196,7 +219,7 @@ module P4Table = struct
           entries = mi_entries;
         }]
     in
-    ex_table @ ra_table @ mi_table
+    ex_table @ ra_table @ lpm_table @ mi_table
 
   let from_abstract (qt:QueryTable.t) (mgid_for_group:int IntSetMap.t) : t list =
     if qt.is_terminal then
@@ -215,13 +238,28 @@ module P4Table = struct
   let space_pad_str s n : string =
     s ^ (String.make (max 0 (n - (String.length s))) ' ')
 
-  let int_of_value v w =
+  let str_of_value v w inc =
     match v with
-    | Number i -> i
-    | String s -> binary_of_str (space_pad_str s (w/8))
+    | Number i -> Printf.sprintf "%u" (i + inc)
+    | IP i -> Printf.sprintf "%u" (i + inc)
+    | IPv6 (a, b, c, d) ->
+        let open Stdint.Uint128 in
+        to_string
+        (logor (shift_left (of_int a) 96)
+        (logor (shift_left (of_int b) 64)
+        (logor (shift_left (of_int c) 32)
+                           (of_int d))))
+    | String s -> Printf.sprintf "%u" (binary_of_str (space_pad_str s (w/8)))
 
   let format_value v =
-    Printf.sprintf "0x%x" (int_of_value v 0)
+    match v with
+    | IP i ->
+        Printf.sprintf "%d.%d.%d.%d"
+          ((i lsr 24) land 255)
+          ((i lsr 16) land 255)
+          ((i lsr 8)  land 255)
+          (i land 255)
+    | _ -> Printf.sprintf "%s" (str_of_value v 0 0)
 
   let format_args args =
     Caml.String.concat " "
@@ -234,26 +272,30 @@ module P4Table = struct
     | EqMatch(v, _) ->
         format_value v
     | LtMatch (v, w) ->
-        Printf.sprintf "0x00->0x%x" ((int_of_value v w)-1)
+        Printf.sprintf "0x00->%s" (str_of_value v w (-1))
     | GtMatch (v, w) ->
-        Printf.sprintf "0x%x->0x%x" ((int_of_value v w)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value a w) (int_of_value b w)
+        Printf.sprintf "%s->0x%x" (str_of_value v w 1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (str_of_value a w 0) < (str_of_value b w 0) ->
+        Printf.sprintf "%s->%s" (str_of_value a w 0) (str_of_value b w 0)
     | RangeMatch(a, b, w) ->
-        Printf.sprintf "0x%x->0x%x" (int_of_value b w) (int_of_value a w)
+        Printf.sprintf "%s->%s" (str_of_value b w 0) (str_of_value a w 0)
+    | LpmMatch(a, b, w) ->
+        Printf.sprintf "%s/%s" (format_value a) (str_of_value b w 0)
 
   let json_format_match m =
     match m with
     | EqMatch(v, w) ->
-        Printf.sprintf "[%u]" (int_of_value v w)
+        Printf.sprintf "[%s]" (str_of_value v w 0)
     | LtMatch (v, w) ->
-        Printf.sprintf "[0, %d]" ((int_of_value v w)-1)
+        Printf.sprintf "[0, %s]" (str_of_value v w (-1))
     | GtMatch (v, w) ->
-        Printf.sprintf "[%d, %d]" ((int_of_value v w)+1) ((int_exp 2 w)-1)
-    | RangeMatch(a, b, w) when (int_of_value a w) < (int_of_value b w) ->
-        Printf.sprintf "[%d, %d]" (int_of_value a w) (int_of_value b w)
+        Printf.sprintf "[%s, %d]" (str_of_value v w 1) ((int_exp 2 w)-1)
+    | RangeMatch(a, b, w) when (str_of_value a w 0) < (str_of_value b w 0) ->
+        Printf.sprintf "[%s, %s]" (str_of_value a w 0) (str_of_value b w 0)
     | RangeMatch(a, b, w) ->
-        Printf.sprintf "[%d, %d]" (int_of_value b w) (int_of_value a w)
+        Printf.sprintf "[%s, %s]" (str_of_value b w 0) (str_of_value a w 0)
+    | LpmMatch(a, b, w) ->
+        Printf.sprintf "[%s, %s]" (str_of_value a w 0) (str_of_value b w 0)
 
   let format_matches ms =
     Caml.String.concat " "
@@ -270,12 +312,13 @@ module P4Table = struct
       table_name act (format_matches matches) (format_args args) priority
 
 
-  let format_t t =
-    Caml.String.concat "\n"
+  let format_t oc t =
+    List.iter
       (List.map t.entries ~f:(format_entry t.name))
+      ~f:(Printf.fprintf oc "%s\n")
 
 
-  let json t =
+  let json (oc:Out_channel.t) t =
     let json_matches ms : string =
       Caml.String.concat ","
         (List.map2_exn t.fields ms ~f:(fun hf m ->
@@ -287,22 +330,23 @@ module P4Table = struct
       | "set_next_state" -> "next_state"
       | "set_mgid" -> "mgid"
       | "set_egress_port" -> "port"
-      | _ -> raise (Failure "Unknown action") in
+      | _ ->  "arg1"
+    in
     let json_entry e =
       let (matches, (act, args)) = e in
       let priority = if is_ternary matches then
         Printf.sprintf ", \"priority\": %d" (get_priority ()) else "" in
       let params =
         if (List.length args) > 0 then
-          (Printf.sprintf ", \"action_params\": {\"%s\": %d}" (arg_name act)
-          (int_of_value  (List.hd_exn args) 0)
+          (Printf.sprintf ", \"action_params\": {\"%s\": %s}" (arg_name act)
+          (str_of_value  (List.hd_exn args) 0 0)
           ) else "" in
-      Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\":
-        {%s}, \"action_name\": \"Camus.%s\"%s%s}"
+      Printf.sprintf "{\"table_name\": \"Camus.%s\", \"match_fields\": {%s}, \"action_name\": \"Camus.%s\"%s%s}"
         t.name (json_matches matches) act params priority
       in
-    Caml.String.concat ","
+    List.iter
       (List.map t.entries ~f:json_entry)
+      ~f:(fun e -> Printf.fprintf oc "%s,\n" e)
 
 end
 
@@ -368,14 +412,15 @@ module P4RuntimeConf = struct
     }
 
 
-  let format_commands t =
-    Caml.String.concat "\n"
-      (List.map (String.Map.data t.tables) ~f:P4Table.format_t)
+  let format_commands oc t =
+      List.iter (String.Map.data t.tables) ~f:(P4Table.format_t oc)
 
-  let json t =
-    Printf.sprintf "[%s]"
-    (Caml.String.concat ","
-      (List.map (String.Map.data t.tables) ~f:P4Table.json))
+  let dump_json oc t =
+    Printf.fprintf oc "[";
+    List.iter
+      (String.Map.data t.tables)
+      ~f:(P4Table.json oc);
+    Printf.fprintf oc "\nnull]"
 
   let format_mcast_groups t =
     Caml.String.concat "\n"

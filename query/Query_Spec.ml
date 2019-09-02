@@ -10,6 +10,7 @@ module QuerySpec = struct
   type required_match =
     | ExactMatch
     | RangeMatch
+    | LpmMatch
     | ExactAndRangeMatch
     [@@deriving compare, sexp]
 
@@ -23,6 +24,7 @@ module QuerySpec = struct
     [@@deriving compare, sexp]
 
   type t = {
+             default_action : string option;
              fields : field list;
              counters: counter list}
            [@@deriving compare, sexp]
@@ -46,7 +48,10 @@ module QuerySpec = struct
       | _::tail -> findrec tail
       | [] -> raise (Failure "Could not find width for header field")
     in
-    findrec t.fields
+    if h="stful_meta" then
+      32
+    else
+      findrec t.fields
 
   let prioritize_fields (qs:t) (rules:QueryRule.t list) =
     let open QueryFormula in
@@ -62,6 +67,7 @@ module QuerySpec = struct
       | Eq(HeaderField(h, f, _, _), c) -> Eq(HeaderField(h, f, getp h f, getw h f), c)
       | Lt(HeaderField(h, f, _, _), c) -> Lt(HeaderField(h, f, getp h f, getw h f), c)
       | Gt(HeaderField(h, f, _, _), c) -> Gt(HeaderField(h, f, getp h f, getw h f), c)
+      | Lpm(HeaderField(h, f, _, _), c1, c2) -> Lpm(HeaderField(h, f, getp h f, getw h f), c1, c2)
     in
     let rec update_form q =
       match q with
@@ -122,11 +128,26 @@ let load_query_spec (p4_path:string) : QuerySpec.t =
             (HeaderField(h, f, ExactMatch, w))::l
         | QueryFieldRange(h, f, w) ->
             (HeaderField(h, f, RangeMatch, w))::l
+        | QueryFieldLpm(h, f, w) ->
+            (HeaderField(h, f, LpmMatch, w))::l
         | QueryFieldCounter(id, tumble_time) ->
             (HeaderField("stful_meta", id, RangeMatch, 16))::l
         | _ -> l) in
-  let counters = [] in
-  { fields = fs; counters = counters }
+  let counters =
+    List.fold_left
+    anns
+    ~init:[]
+    ~f:(fun l a ->
+        match a with
+        | QueryFieldCounter(id, tumble_time) -> (id, tumble_time)::l
+        | _ -> l) in
+  let rec find_default_action anns =
+    match anns with
+    | [] -> None
+    | QueryDefaultAction(a)::_ -> Some a
+    | _::t -> find_default_action t
+  in
+  { default_action = (find_default_action anns); fields = fs; counters = counters }
 
 
 

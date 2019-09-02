@@ -5,6 +5,18 @@ module type BddVar = sig
     [@@deriving compare, sexp]
   type assignments
 
+  type var_type = t
+    [@@deriving compare, sexp]
+
+  module ConstraintSet : sig
+    type t
+      [@@deriving compare, sexp]
+    val empty : t
+    val add_constraint : t -> var_type -> t
+    val implies_true : t -> var_type -> bool
+    val implies_false : t -> var_type -> bool
+  end
+
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val disjoint : t -> t -> bool
@@ -22,6 +34,7 @@ module type BddLabel = sig
     [@@deriving compare, sexp]
   val compare : t -> t -> int
   val format_t : t -> string
+  val hash : t -> int
 end
   
 module Conjunction (V: BddVar) : sig

@@ -22,7 +22,9 @@ let parse_rules_string string =
 
 let parse_rules_file filename =
   Query_Lexer.setup filename;
-  let s = In_channel.read_all filename in
+  let s = if filename = "-" then
+    In_channel.input_all In_channel.stdin else
+      In_channel.read_all filename in
   parse_rules_string s
 
 let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
@@ -80,12 +82,14 @@ let go prog_out rt_out dot_out rules_fn slices fn : unit Deferred.t =
 
                let rtc = P4RuntimeConf.from_abstract tables in
 
-               let () = Out_channel.write_all (out_base ^ "_commands.txt")
-                          ~data:(P4RuntimeConf.format_commands rtc) in
+               let () = (
+                 let oc = Out_channel.create (out_base ^ "_commands.txt") in
+                 P4RuntimeConf.format_commands oc rtc; Out_channel.close oc) in
                let () = Format.eprintf "[commands: %s_commands.txt]@\n%!" out_base in
 
-               let () = Out_channel.write_all (out_base ^ "_entries.json")
-                          ~data:(P4RuntimeConf.json rtc) in
+               let () = (
+                 let oc = Out_channel.create (out_base ^ "_entries.json") in
+                 P4RuntimeConf.dump_json oc rtc; Out_channel.close oc) in
                let () = Format.eprintf "[entries: %s_entries.json]@\n%!" out_base in
 
                let () = Out_channel.write_all (out_base ^ "_mcast_groups.txt")

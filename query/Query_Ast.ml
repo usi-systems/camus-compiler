@@ -16,12 +16,15 @@ type expr =
   | Not of expr
   | Call of string * expr list
   | Lt of expr * expr
+  | Lpm of expr * expr * expr
   | Gt of expr * expr
   | Eq of expr * expr
   | Field of string * string
   | StringLit of string
   | NumberLit of int
   | IpAddr of int
+  | Ip6Addr of int * int * int * int
+  | MacAddr of int
 
 type action_list = expr list
 

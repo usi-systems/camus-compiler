@@ -9,6 +9,18 @@ module type BddVar = sig
     [@@deriving compare, sexp]
   type assignments
 
+  type var_type = t
+    [@@deriving compare, sexp]
+
+  module ConstraintSet : sig
+    type t
+      [@@deriving compare, sexp]
+    val empty : t
+    val add_constraint : t -> var_type -> t
+    val implies_true : t -> var_type -> bool
+    val implies_false : t -> var_type -> bool
+  end
+
   val compare : t -> t -> int
   val equal : t -> t -> bool
   val disjoint : t -> t -> bool
@@ -26,6 +38,7 @@ module type BddLabel = sig
     [@@deriving compare, sexp]
   val compare : t -> t -> int
   val format_t : t -> string
+  val hash : t -> int
 end
 
 module Conjunction (V: BddVar) = struct
@@ -125,7 +138,7 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
       | N n ->
           (Hashtbl.hash (V.hash n.var, getuid n.low, getuid n.high)) land Int.max_value
       | L l ->
-          (Hashtbl.hash l.labels) land Int.max_value
+          (Hashtbl.hash (List.map (LabelSet.elements l.labels) ~f:L.hash)) land Int.max_value
   end
   module NodeWeakHS = Caml.Weak.Make(NodeH)
 
@@ -161,56 +174,82 @@ module Bdd (V: BddVar) (L: BddLabel) = struct
       then bdd.next_uid <- bdd.next_uid+1;
     l2
 
-  let rec prune_implicit (bdd:t) (ancestor:V.t) (is_high_branch:bool) (n:node) =
+  let rec prune_implicit (bdd:t) (cs:V.ConstraintSet.t) (ancestor:V.t) (is_high_branch:bool) (n:node) =
     match n with
     | N {var = var; high = high; low = low; _} ->
+        let cs_high = V.ConstraintSet.add_constraint cs var in
         if V.independent ancestor var then (* stop descending the tree *)
           n
         else if is_high_branch && V.disjoint ancestor var then (* implicitly false *)
-          prune_implicit bdd ancestor is_high_branch low
+          prune_implicit bdd cs ancestor is_high_branch low
         else if is_high_branch && V.subset ancestor var then (* implicitly true *)
-          prune_implicit bdd ancestor is_high_branch high
+          prune_implicit bdd cs_high ancestor is_high_branch high
         else if (not is_high_branch) && V.subset var ancestor then (* implicitly false *)
-          prune_implicit bdd ancestor is_high_branch low
+          prune_implicit bdd cs ancestor is_high_branch low
+        else if V.ConstraintSet.implies_true cs var then (* implicitly true *)
+          prune_implicit bdd cs_high ancestor is_high_branch high
         else
-          mk_node bdd var (prune_implicit bdd ancestor is_high_branch low) (prune_implicit bdd ancestor is_high_branch high)
+          let low2 = (prune_implicit bdd cs ancestor is_high_branch low) in
+          let high2 = (prune_implicit bdd cs_high ancestor is_high_branch high) in
+          if not (phys_equal low2 low && phys_equal high2 high) then
+            mk_node bdd var low2 high2
+          else
+            n
     | L _ -> n
 
 
-  let rec merge_nodes (bdd:t) (x:node) (y:node) : node =
-    let merge, mk_node, mk_leaf, prune_implicit = merge_nodes bdd, mk_node bdd, mk_leaf bdd, prune_implicit bdd in
+  let rec _merge_nodes (bdd:t) (cs:V.ConstraintSet.t) (x:node) (y:node) : node =
+    let merge, mk_node, mk_leaf, prune_implicit = _merge_nodes bdd, mk_node bdd, mk_leaf bdd, prune_implicit bdd in
     let x,y = match x, y with (* order x and y if they are both internal (decision) nodes *)
     | N {var = var1; _}, N {var = var2; _} ->
         if (V.compare var1 var2) < 0 then (x,y) else (y,x)
     | _ -> (x, y)
     in
     match x, y with
+    | (L _ as l1), (L _ as l2) when node_equal l1 bdd.empty_leaf && node_equal l2 bdd.empty_leaf ->
+        bdd.empty_leaf
     | L {labels = lbls1}, L {labels = lbls2} ->                 (* both leaves *)
         mk_leaf (LabelSet.union lbls1 lbls2)
-    | (L _ as l), (N {var = var; low = low; high = high; _} as n)
     | (N {var = var; low = low; high = high; _} as n), (L _ as l) when node_equal l bdd.empty_leaf ->   (* empty leaf and decision node *)
         n (* this is an optimization; we don't need to push the empty leaf all the way down all branches *)
+    | (L _ as l), (N {var = var; low = low; high = high; _} as n) when node_equal l bdd.empty_leaf ->
+        n
     | (L _ as l), N {var = var; low = low; high = high; _}
     | N {var = var; low = low; high = high; _}, (L _ as l) ->   (* leaf and decision node *)
-        mk_node var (merge low l) (merge high l)
+        if V.ConstraintSet.implies_true cs var then
+          merge cs high l
+        else
+          let cs_high = V.ConstraintSet.add_constraint cs var in
+          mk_node var (merge cs low l) (merge cs_high high l)
     | N {var = var1; low = low1; high = high1; _},              (* both decision nodes *)
       N {var = var2; low = low2; high = high2; _} when V.equal var1 var2 ->
-        mk_node var1 (merge low1 low2) (merge high1 high2)
+        if V.ConstraintSet.implies_true cs var1 then
+          merge cs high1 high2
+        else
+          let cs_high = V.ConstraintSet.add_constraint cs var1 in
+          mk_node var1 (merge cs low1 low2) (merge cs_high high1 high2)
     | N {var = var1; low = low1; high = high1; _}, (* already sorted; var1 comes before var2 in the BDD ordering *)
       N {var = var2; low = low2; high = high2; _} ->            (* both nodes *)
         begin
-          if V.disjoint var1 var2
+          let cs_high = V.ConstraintSet.add_constraint cs var1 in
+          if V.ConstraintSet.implies_true cs var1
           then
-            mk_node var1 (merge low1 (prune_implicit var1 false y)) (merge (prune_implicit var1 true low2) high1)
+            merge cs high1 y
+          else if V.disjoint var1 var2
+          then
+            mk_node var1 (merge cs low1 (prune_implicit cs var1 false y)) (merge cs_high (prune_implicit cs_high var1 true low2) high1)
           else if V.subset var2 var1 (* var2=true --> var1=true *)
           then
-            mk_node var1 (merge low1 (prune_implicit var1 false low2)) (merge high1 (prune_implicit var1 true y))
+            mk_node var1 (merge cs low1 (prune_implicit cs var1 false low2)) (merge cs_high high1 (prune_implicit cs_high var1 true y))
           else if V.subset var1 var2 (* var1=true --> var2=true *)
           then
-            mk_node var1 (merge low1 (prune_implicit var1 false y)) (merge high1 (prune_implicit var1 true high2))
+            mk_node var1 (merge cs low1 (prune_implicit cs var1 false y)) (merge cs_high high1 (prune_implicit cs_high var1 true high2))
           else
-            mk_node var1 (merge low1 (prune_implicit var1 false y)) (merge high1 (prune_implicit var1 true y))
+            mk_node var1 (merge cs low1 (prune_implicit cs var1 false y)) (merge cs_high high1 (prune_implicit cs_high var1 true y))
         end
+
+  let merge_nodes (bdd:t) (x:node) (y:node) : node =
+    _merge_nodes bdd V.ConstraintSet.empty x y
 
   let fmt_lbls (lbls:LabelSet.t) : string =
     String.concat ~sep:", " (List.map ~f:L.format_t (LabelSet.to_list lbls))

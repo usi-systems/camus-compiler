@@ -24,7 +24,8 @@ module QueryTable = struct
     | LtMatch of QueryConst.t
     | GtMatch of QueryConst.t
     | EqMatch of QueryConst.t
-    | RangeMatch of QueryConst.t * QueryConst.t
+    | RangeMatch of QueryConst.t * QueryConst.t (* inclusive *)
+    | LpmMatch of QueryConst.t * QueryConst.t
     | Wildcard
     [@@deriving compare, sexp]
 
@@ -39,6 +40,7 @@ module QueryTable = struct
     field: QueryField.t option;
     entries: entry list;
     is_terminal: bool;
+    default_action: string option;
     }
     [@@deriving compare, sexp]
 
@@ -51,6 +53,8 @@ module QueryTable = struct
     | (RangeMatch (x, y), RangeMatch (j, k)) ->
         let c = QueryConst.compare x j in
         if c = 0 then QueryConst.compare y k else c
+    | LpmMatch (x, y), LpmMatch (j, k) ->
+        if x=j then QueryConst.compare y k else QueryConst.compare x j
     | (EqMatch _, _) -> -1
     | (_, EqMatch _) -> 1
     | (RangeMatch _, _) -> -1
@@ -59,6 +63,8 @@ module QueryTable = struct
     | (_, LtMatch _) -> 1
     | (GtMatch _, _) -> -1
     | (_, GtMatch _) -> 1
+    | (LpmMatch _, _) -> -1
+    | (_, LpmMatch _) -> 1
 
   let cmp_entry a b =
     match (a, b) with
@@ -82,6 +88,8 @@ module QueryTable = struct
     | GtMatch(c) -> Printf.sprintf "> %s" (QueryConst.format_t c)
     | RangeMatch(c1, c2) ->
         Printf.sprintf "%s -> %s" (QueryConst.format_t c1) (QueryConst.format_t c2)
+    | LpmMatch(c1, c2) ->
+        Printf.sprintf "%s/%s" (QueryConst.format_t c1) (QueryConst.format_t c2)
     | Wildcard -> "*"
 
   let table_name t =
@@ -182,6 +190,7 @@ module QueryTablePipeline = struct
     let actions_table = {
       field = None;
       is_terminal = true;
+      default_action = qs.default_action;
       entries =
         (List.map
           sorted_action_states
@@ -194,23 +203,31 @@ module QueryTablePipeline = struct
       | Lt (_, x) -> LtMatch x
       | Gt (_, x) -> GtMatch x
       | Eq (_, x) -> EqMatch x
+      | Lpm (_, a, b) -> LpmMatch (a, b)
     in
 
     (* This assumes that m and the new pred are overlapping *)
     let refine_match (m:field_match) (pred:AtomicPredicate.t) : field_match =
       let m2 = make_match pred in
+      let mk_range a b =
+          RangeMatch (QueryConst.Number((QueryConst.to_int a) + 1), QueryConst.Number((QueryConst.to_int b) - 1))
+      in
       match m, m2 with
       | Wildcard, _ | _, Wildcard -> m2
       | EqMatch x, _ | _, EqMatch x -> EqMatch x
+      | LpmMatch _, _ | _, LpmMatch _ -> raise (Failure "Cannot union LPM with other match types")
       | GtMatch x1, GtMatch x2 -> GtMatch (QueryConst.max x1 x2)
       | LtMatch y1, LtMatch y2 -> LtMatch (QueryConst.min y1 y2)
-      | LtMatch x, GtMatch y | GtMatch y, LtMatch x -> RangeMatch (x, y)
-      | RangeMatch (x1, y1), LtMatch y2 | LtMatch y2, RangeMatch (x1, y1) ->
-          RangeMatch (x1, QueryConst.min y1 y2)
-      | RangeMatch (x1, y1), GtMatch x2 | GtMatch x2, RangeMatch (x1, y1) ->
-          RangeMatch (QueryConst.max x1 x2, y1)
-      | RangeMatch (x1, y1), RangeMatch (x2, y2) ->
-          RangeMatch (QueryConst.max x1 x2, QueryConst.min y1 y2)
+      | LtMatch x, GtMatch y -> mk_range y x
+      | GtMatch x, LtMatch y -> mk_range x y
+      | _ -> raise (Failure "Something is wrong if a RangeMatch is being further refined")
+    in
+
+    let tidy_range_match m =
+      match m with
+      | RangeMatch (a, b) when a = b ->
+          EqMatch a
+      | _ -> m
     in
 
     let gather_entries field entries entry_node : EntrySet.t =
@@ -220,7 +237,7 @@ module QueryTablePipeline = struct
         | N {var=p; low=l; high=h} when (AtomicPredicate.field p) = field ->
             EntrySet.union (_visit m l) (_visit (refine_match m p) h)
         | N {uid=i} | L {leaf_uid=i} ->
-            EntrySet.singleton (Transition (entry_id, m, i))
+            EntrySet.singleton (Transition (entry_id, (tidy_range_match m), i))
       in
       EntrySet.union entries (_visit Wildcard entry_node)
     in
@@ -255,6 +272,7 @@ module QueryTablePipeline = struct
         field = Some qf;
         entries = entries;
         is_terminal = false;
+        default_action = None;
       }
     in
     {

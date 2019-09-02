@@ -68,6 +68,7 @@
     | n -> failwith ("Lexer.int_of_hex: " ^ (String.make 1 n))
 
   let parse_byte str = Int64.of_string ("0x" ^ str)
+  let parse_hextet str = Int64.to_int (Int64.of_string ("0x" ^ str))
   let parse_decbyte str = Int64.of_string str
 
 }
@@ -81,6 +82,8 @@ let hex = "0x" ['0'-'9' 'a'-'f' 'A'-'F']+
 let int_char = ['0' - '9']
 let string_lit = '"' [^'"']* '"'
 let hex_char = ['0' - '9' 'A' - 'F' 'a' - 'f']
+let hexbyte = hex_char hex_char
+let hextet = hex_char hex_char hex_char hex_char
 let decbyte =
      (['0'-'9'] ['0'-'9'] ['0'-'9']) | (['0'-'9'] ['0'-'9']) | ['0'-'9']
 
@@ -96,6 +99,7 @@ rule main =
   | ";"                { SEMICOLON }
   | "("                { LPAREN }
   | ")"                { RPAREN }
+  | "/"                { FSLASH }
   | "\""               {
                          let s = string_lit "" lexbuf in
                          STRING_LIT(info lexbuf,s)
@@ -110,11 +114,29 @@ rule main =
 
   | (decbyte as b4) "." (decbyte as b3) "." (decbyte as b2) "." (decbyte as b1)
           { let open Int64 in
-            IPADDR(info lexbuf,
+            IP4ADDR(info lexbuf,
               (logor (shift_left (parse_decbyte b4) 24)
                  (logor (shift_left (parse_decbyte b3) 16)
                     (logor (shift_left (parse_decbyte b2) 8)
                        (parse_decbyte b1))))) }
+
+  | (hextet as h8) ":" (hextet as h7) ":" (hextet as h6) ":" (hextet as h5) ":" (hextet as h4) ":" (hextet as h3) ":" (hextet as h2) ":" (hextet as h1)
+          {
+            IP6ADDR(info lexbuf,
+              (((parse_hextet h8) lsl 16) lor (parse_hextet h7)),
+              (((parse_hextet h6) lsl 16) lor (parse_hextet h5)),
+              (((parse_hextet h4) lsl 16) lor (parse_hextet h3)),
+              (((parse_hextet h2) lsl 16) lor (parse_hextet h1))) }
+
+  | (hexbyte as b6) ":" (hexbyte as b5) ":" (hexbyte as b4) ":" (hexbyte as b3) ":" (hexbyte as b2) ":" (hexbyte as b1)
+          { let open Int64 in
+            MACADDR(info lexbuf,
+              (logor (shift_left (parse_byte b6) 40)
+              (logor (shift_left (parse_byte b5) 32)
+              (logor (shift_left (parse_byte b4) 24)
+              (logor (shift_left (parse_byte b3) 16)
+              (logor (shift_left (parse_byte b2) 8)
+                                 (parse_byte b1))))))) }
 
   | newline            { newline lexbuf; main lexbuf  }
   | eof                { EOF }

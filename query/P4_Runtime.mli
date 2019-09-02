@@ -9,6 +9,8 @@ module P4Table : sig
 
   type value =
     | Number of int
+    | IP of int
+    | IPv6 of int * int * int * int
     | String of string
     [@@deriving compare, sexp]
 
@@ -23,6 +25,7 @@ module P4Table : sig
     | LtMatch of value * width
     | GtMatch of value * width
     | RangeMatch of value * value * width
+    | LpmMatch of value * value * width
     [@@deriving compare, sexp]
 
   type entry =
@@ -36,7 +39,7 @@ module P4Table : sig
     }
     [@@deriving compare, sexp]
 
-  val format_t : t -> string
+  val format_t : Out_channel.t -> t -> unit
   val format_value : value -> string
   val from_abstract : QueryTable.t -> int IntSetMap.t -> t list
 end
@@ -54,6 +57,6 @@ module P4RuntimeConf : sig
 
   val from_abstract : QueryTablePipeline.t -> t
   val format_mcast_groups : t -> string
-  val format_commands : t -> string
-  val json : t -> string
+  val format_commands : Out_channel.t -> t -> unit
+  val dump_json : Out_channel.t -> t -> unit
 end

@@ -6,7 +6,9 @@
 %token <Query_Ast.info * string> STRING_LIT
 %token <Query_Ast.info * string> IDENT
 %token <Query_Ast.info * int> NUMBER
-%token <Query_Ast.info * Int64.t> IPADDR
+%token <Query_Ast.info * Int64.t> IP4ADDR
+%token <Query_Ast.info * int * int * int * int> IP6ADDR
+%token <Query_Ast.info * Int64.t> MACADDR
 %token <Query_Ast.info> AND
 %token <Query_Ast.info> OR
 %token <Query_Ast.info> LT
@@ -18,6 +20,7 @@
 %token COMMA
 %token SEMICOLON
 %token LPAREN RPAREN
+%token FSLASH
 
 %type <Query_Ast.rule list> rule_list
 %type <Query_Ast.rule> rule
@@ -56,6 +59,7 @@ relExpr:
   | lhsExpr LT constExpr { Lt($1,$3) }
   | lhsExpr GT constExpr { Gt($1,$3) }
   | lhsExpr EQ constExpr { Eq($1,$3) }
+  | lhsExpr EQ constExpr FSLASH constExpr { Lpm($1,$3,$5) }
 
 lhsExpr:
   | fieldExpr { $1 }
@@ -82,5 +86,7 @@ fieldExpr:
 constExpr:
   | STRING_LIT { let _,id = $1 in StringLit(id) }
   | NUMBER { let _,id = $1 in NumberLit(id) }
-  | IPADDR { let _,id = $1 in IpAddr(Int64.to_int id) }
+  | IP4ADDR { let _,id = $1 in IpAddr(Int64.to_int id) }
+  | IP6ADDR { let _,a,b,c,d = $1 in Ip6Addr(a, b, c, d) }
+  | MACADDR { let _,id = $1 in MacAddr(Int64.to_int id) }
 

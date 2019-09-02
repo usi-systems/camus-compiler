@@ -12,7 +12,8 @@ module QueryTable : sig
     | LtMatch of QueryConst.t
     | GtMatch of QueryConst.t
     | EqMatch of QueryConst.t
-    | RangeMatch of QueryConst.t * QueryConst.t
+    | RangeMatch of QueryConst.t * QueryConst.t (* inclusive *)
+    | LpmMatch of QueryConst.t * QueryConst.t
     | Wildcard
     [@@deriving compare, sexp]
 
@@ -27,6 +28,7 @@ module QueryTable : sig
     field: QueryField.t option;
     entries: entry list;
     is_terminal: bool;
+    default_action: string option;
     }
     [@@deriving compare, sexp]
 

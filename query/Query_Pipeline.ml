@@ -9,6 +9,9 @@ let mk_query_exact_tbl_name h f =
 let mk_query_range_tbl_name h f =
       "query_" ^ h ^ "_" ^ f ^ "_range"
 
+let mk_query_lpm_tbl_name h f =
+      "query_" ^ h ^ "_" ^ f ^ "_lpm"
+
 let mk_query_miss_tbl_name h f =
       "query_" ^ h ^ "_" ^ f ^ "_miss"
 
@@ -25,6 +28,10 @@ let mk_window_meta_name f = f ^ "_reset_window"
 
 
 let gen_query_control (qs:QuerySpec.t) : string =
+  let default_action = match qs.default_action with
+    | None -> "query_drop"
+    | Some a -> a
+  in
   let tbls =
     List.fold_right
     qs.fields
@@ -43,6 +50,14 @@ let gen_query_control (qs:QuerySpec.t) : string =
         ^ (if m = ExactAndRangeMatch || m = RangeMatch then
              "  table " ^ (mk_query_range_tbl_name h f) ^ " {
     key = { meta.query.state: exact; hdr." ^ h ^ "." ^ f ^ ": range; }
+    actions = { set_next_state; NoAction; }
+    size = 1024;
+    default_action = NoAction();
+  }\n"
+            else "")
+        ^ (if m = LpmMatch then
+             "  table " ^ (mk_query_lpm_tbl_name h f) ^ " {
+    key = { meta.query.state: exact; hdr." ^ h ^ "." ^ f ^ ": lpm; }
     actions = { set_next_state; NoAction; }
     size = 1024;
     default_action = NoAction();
@@ -69,6 +84,9 @@ let gen_query_control (qs:QuerySpec.t) : string =
           else "")
         ^ (if m = RangeMatch || m = ExactAndRangeMatch then
           "    if (!" ^ (mk_query_range_tbl_name h f) ^ ".apply().hit)\n"
+          else "")
+        ^ (if m = LpmMatch then
+          "    if (!" ^ (mk_query_lpm_tbl_name h f) ^ ".apply().hit)\n"
           else "")
         ^ "      "  ^ (mk_query_miss_tbl_name h f) ^ ".apply();\n\n"))
     ^ "    query_actions.apply();\n  }"
@@ -100,8 +118,8 @@ control Camus(inout headers hdr,
 
   table query_actions {
     key = { meta.query.state: exact; }
-    actions = { query_drop; set_egress_port; set_mgid; }
+    actions = { " ^ default_action ^ "; set_egress_port; set_mgid; }
     size = 1024;
-    default_action = query_drop();
+    default_action = " ^ default_action ^ "();
   }\n\n" ^ tbls ^ control ^ "\n}"
 
