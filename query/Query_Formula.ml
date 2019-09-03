@@ -278,9 +278,9 @@ module Formula (A: Atom) = struct
     let rec _to_list t =
       match t with
       | Or(x, y) -> x::(_to_list y)
-      (* TODO: shouldn't we check: Not _ -> [t] *)
       | And _ -> [t]
       | Atom _ -> [t]
+      | Not(Atom _) -> [t]
       | _ -> raise (Failure ("Formula should be in canonical DNF: " ^ (format_t t))) in
     let dnf = to_dnf t in
     _to_list dnf

@@ -97,6 +97,7 @@ rule main =
   | "."                { DOT }
   | ","                { COMMA }
   | ";"                { SEMICOLON }
+  | "!"                { BANG }
   | "("                { LPAREN }
   | ")"                { RPAREN }
   | "/"                { FSLASH }

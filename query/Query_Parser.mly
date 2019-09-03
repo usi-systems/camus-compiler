@@ -21,6 +21,7 @@
 %token SEMICOLON
 %token LPAREN RPAREN
 %token FSLASH
+%token BANG
 
 %type <Query_Ast.rule list> rule_list
 %type <Query_Ast.rule> rule
@@ -60,6 +61,10 @@ relExpr:
   | lhsExpr GT constExpr { Gt($1,$3) }
   | lhsExpr EQ constExpr { Eq($1,$3) }
   | lhsExpr EQ constExpr FSLASH constExpr { Lpm($1,$3,$5) }
+  | BANG lhsExpr LT constExpr { Not(Lt($2,$4)) }
+  | BANG lhsExpr GT constExpr { Not(Gt($2,$4)) }
+  | BANG lhsExpr EQ constExpr { Not(Eq($2,$4)) }
+  | BANG lhsExpr EQ constExpr FSLASH constExpr { Not(Lpm($2,$4,$6)) }
 
 lhsExpr:
   | fieldExpr { $1 }
